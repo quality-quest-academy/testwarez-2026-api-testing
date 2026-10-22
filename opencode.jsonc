@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "jira": {
+        "type": "local",
+        "command": ["uvx", "mcp-atlassian", "--env-file", ".env"],
+        "cwd": "."
+      }
+    }
+  }
+}

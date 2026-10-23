@@ -50,9 +50,26 @@ variables are added. Likewise never read the GitHub token (see below).
 
 Push/pull uses Git Credential Manager with a fine-grained GitHub token stored in
 Windows Credential Manager. **Agents never see or handle the token.** If
-authentication fails (e.g. expired token), tell the user to replace it using the
-PowerShell procedure in `ai-artifacts/AGENT.md` — do not attempt to do it
-yourself. Verify with `git ls-remote origin`.
+authentication fails (e.g. expired token), tell the user to replace it
+themselves — agents never see it. Have the user run this in a PowerShell window
+(any folder works):
+
+```powershell
+"protocol=https`nhost=github.com`nusername=github`n" | git credential reject 2>$null
+
+$sec = Read-Host -AsSecureString "Paste your fine-grained GitHub token"
+$b   = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+$t   = [Runtime.InteropServices.Marshal]::PtrToStringAuto($b)
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)
+
+"protocol=https`nhost=github.com`nusername=github`npassword=$t`n`n" | git credential approve
+
+$t = $null; $b = $null; $sec = $null
+```
+
+Then verify with `git ls-remote origin` (no prompt = stored credential works).
+Token scope for agents to remember: fine-grained PAT, this repository only,
+**Contents: Read and write** — never embed it in remote URLs or config files.
 
 ## Commits
 

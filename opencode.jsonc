@@ -4,8 +4,12 @@
     "servers": {
       "jira": {
         "type": "local",
-        "command": ["uvx", "mcp-atlassian", "--env-file", ".env"],
-        "cwd": "."
+        "command": ["uvx", "mcp-atlassian@0.23.1", "--env-file", ".env"],
+        "cwd": ".",
+        "timeout": {
+          "startup": 60000,
+          "catalog": 120000
+        }
       }
     }
   }

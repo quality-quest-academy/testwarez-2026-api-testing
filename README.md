@@ -4,7 +4,7 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-10)
+## Current state (KAN-11)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
@@ -13,8 +13,7 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
 - Two authored OpenAPI **3.0.3** contracts, linting and schema-example unit tests.
 - Playwright API bootstrap smoke tests, TypeScript checks and npm workspaces.
 - Orders has a configurable NBP EUR/PLN HTTP adapter and `mocks/nbp/` provides a
-  deterministic table-A response plus timeout and unavailable modes. It is not an
-  Compose service yet.
+  deterministic table-A response plus timeout and unavailable modes.
 - Orders implements `/health`, `POST /orders` and `GET /orders/{orderId}` with
   private SQLite snapshots, one Products batch request and one NBP rate per new
   checkout. Decimal calculations produce `213.00 EUR × 4.3000 = 915.90 PLN`.
@@ -24,8 +23,35 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
   under the same key return `409 IDEMPOTENCY_KEY_REUSED`. Conflicts and dependency
   failures leave no order or successful-key record, allowing a corrected retry.
 
-There is no frontend, Compose stack, Bruno collection, Schemathesis execution or
-CI workflow yet. These arrive in later tickets.
+`compose.yaml` runs Products, Orders and the deterministic NBP mock with separate
+named SQLite volumes and health checks. There is no frontend, Bruno collection,
+Schemathesis execution or CI workflow yet. These arrive in later tickets.
+
+## Run the backend with Docker Compose
+
+With Docker Desktop running, start the complete deterministic backend from a clean
+checkout with:
+
+```sh
+docker compose up --build
+```
+
+The services are available at `http://localhost:3001` (Products),
+`http://localhost:3002` (Orders) and `http://localhost:3003` (NBP mock). Their
+readiness endpoints are `/health`. Orders reaches Products and the mock only via
+the Compose network; each API mounts its own named volume and only opens its own
+SQLite file.
+
+Stopping the stack with `docker compose down` preserves the seeded Products data
+and any created Orders. To intentionally delete both databases and recreate the
+deterministic Products seed on the next startup, run:
+
+```sh
+docker compose down -v
+```
+
+`down -v` permanently destroys the demo volumes, including all saved orders and
+idempotency records.
 
 ## Products test data reset
 

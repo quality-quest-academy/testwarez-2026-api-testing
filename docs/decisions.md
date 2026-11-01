@@ -187,6 +187,25 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   duplicate keys, but concurrent requests are not promised a replay/conflict
   protocol. Stock validation remains neither reservation nor decrement.
 
+## Docker Compose and persistence (KAN-11)
+
+- `compose.yaml` builds the three backend processes from the shared root
+  `Dockerfile`. The image compiles only the selected workspace and starts its
+  explicit Fastify listener; app factories remain usable without environment
+  configuration in isolated tests.
+- `products-data` mounts only at `/data` in Products and stores
+  `/data/products.db`. `orders-data` mounts only at `/data` in Orders and stores
+  `/data/orders.db`. Neither service mounts or reads the other service's file.
+  Products retains its idempotent seed on startup; Orders starts empty.
+- Orders receives the Products and NBP base URLs through Compose environment
+  variables and communicates with both over HTTP service names. The Compose NBP
+  mock supplies the deterministic fixture rather than the live provider.
+- All three services have Compose health checks. Orders starts after the two
+  dependencies are healthy, while its request-time dependency error handling
+  remains responsible for failures after startup. Named volumes persist across
+  `docker compose down`; `docker compose down -v` is the explicit destructive
+  reset documented in the README.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

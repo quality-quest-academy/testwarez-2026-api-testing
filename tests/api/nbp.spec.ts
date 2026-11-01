@@ -30,6 +30,17 @@ test('retrieves the deterministic last-published EUR/PLN rate from the HTTP mock
   }
 });
 
+test('exposes a readiness endpoint for the composed mock service', async ({ request }) => {
+  const mock = await startNbpMock('success');
+  try {
+    const response = await request.get(`${mock.address}/health`);
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ok' });
+  } finally {
+    await mock.close();
+  }
+});
+
 test('reports an NBP timeout from the controlled delayed mock response', async () => {
   const mock = await startNbpMock('timeout', 100);
   try {

@@ -19,6 +19,8 @@ export function buildNbpMock({
 }: NbpMockOptions = {}) {
   const app = Fastify(options);
 
+  app.get('/health', () => ({ status: 'ok' }));
+
   app.get('/api/exchangerates/rates/a/eur/', async (_request, reply) => {
     if (mode === 'unavailable') {
       return reply.status(503).send({ error: 'NBP mock is unavailable' });

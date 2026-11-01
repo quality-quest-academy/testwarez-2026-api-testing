@@ -1,0 +1,12 @@
+{
+  "table": "A",
+  "currency": "euro",
+  "code": "EUR",
+  "rates": [
+    {
+      "no": "DEMO/2026",
+      "effectiveDate": "2026-10-21",
+      "mid": 4.3
+    }
+  ]
+}

@@ -109,6 +109,20 @@ Real-NBP compatibility is a separate optional, non-blocking check.
 - Fastify route schemas enforce the OpenAPI request constraints. Validation
   failures use the contract's `VALIDATION_ERROR` response shape.
 
+## NBP adapter and mock (KAN-8)
+
+- `NbpClient` is an Orders-owned HTTP boundary. Its base URL is injected rather
+  than read from the environment, defaulting to the real `https://api.nbp.pl`.
+  KAN-9 can inject configuration at its service composition point; standard tests
+  inject the local mock URL and never call the live provider.
+- The adapter requests NBP's last-published table-A EUR endpoint, validates the
+  response shape it needs, and returns a four-decimal rate string and effective
+  date. It distinguishes timeout, unavailable upstream and invalid upstream data
+  for a future Orders route to map to `DEPENDENCY_UNAVAILABLE`.
+- `mocks/nbp` is a small Fastify workspace with the illustrative NBP fixture. Its
+  success, delayed-response and 503 modes deliberately exercise the real adapter
+  over HTTP. Compose wiring and a live-NBP compatibility smoke remain later work.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

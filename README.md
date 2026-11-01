@@ -4,7 +4,7 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-7)
+## Current state (KAN-8)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
@@ -13,10 +13,13 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
   persistence-free factory.
 - Two authored OpenAPI **3.0.3** contracts, linting and schema-example unit tests.
 - Playwright API bootstrap smoke tests, TypeScript checks and npm workspaces.
+- Orders has a configurable NBP EUR/PLN HTTP adapter and `mocks/nbp/` provides a
+  deterministic table-A response plus timeout and unavailable modes. It is not an
+  Orders endpoint or a Compose service yet.
 
 The contracts describe **planned behavior**, not working APIs. There is no
-frontend, NBP mock, Compose stack, Bruno collection, Schemathesis execution or CI
-workflow yet. These arrive in later tickets.
+frontend, Compose stack, Bruno collection, Schemathesis execution or CI workflow
+yet. These arrive in later tickets.
 
 ## Products test data reset
 
@@ -38,7 +41,7 @@ intended.
 ## Local checks
 
 Use Node.js **24.11.1** (see `.node-version`) and npm **11.6.2**. No credentials,
-Docker, Python or browser binaries are needed for KAN-6 checks.
+Docker, Python or browser binaries are needed for these checks.
 
 ```sh
 npm ci
@@ -55,9 +58,10 @@ Individual commands:
 | `npm run test:api` | Playwright HTTP smoke tests against isolated temporary app listeners |
 | `npm test` | Unit tests, then API tests |
 
-No `start`/`dev` command exists yet: KAN-7 exposes the Products app factory for
-tests but does not choose a persistent service database location or listener
-configuration. Tests use no live external services and have no automatic retries.
+No `start`/`dev` command exists yet: KAN-7 exposes the Products app factory and
+KAN-8 exposes the NBP mock factory for tests, but neither chooses a persistent
+listener configuration. Tests use no live external services and have no automatic
+retries.
 
 ## Target architecture and boundaries
 
@@ -82,6 +86,7 @@ explicit reconfirmation. Money is represented as decimal strings.
 | --- | --- |
 | `apps/products-api/` | Products Fastify factory; catalog persistence and endpoints later |
 | `apps/orders-api/` | Orders Fastify factory; checkout persistence and endpoints later |
+| `mocks/nbp/` | Configurable NBP table-A EUR/PLN HTTP test double and fixture |
 | `contracts/` | Independently readable Products and Orders OpenAPI contracts |
 | `tests/unit/` | Vitest only: pure unit/schema-tooling tests |
 | `tests/api/` | Playwright: isolated API tests (bootstrap smoke tests currently) |

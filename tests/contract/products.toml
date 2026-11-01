@@ -1,0 +1,17 @@
+# No cross-run observations or adaptive schema changes in the required check.
+[cache]
+enabled = false
+
+[phases.fuzzing.error-feedback]
+enabled = false
+
+# Mix known and missing identifiers without narrowing the authored contract.
+[dictionaries.products]
+values = ["prod-001", "product-missing"]
+
+[dictionaries.offers]
+values = ["offer-101", "offer-missing"]
+
+[parameters]
+"path.productId" = { dictionary = "products", probability = 0.8 }
+"path.offerId" = { dictionary = "offers", probability = 0.8 }

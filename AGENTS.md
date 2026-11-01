@@ -29,20 +29,25 @@ has instead chosen to keep it gitignored; follow the owner's choice.
 
 ## Repo state
 
-KAN-5–10 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
+KAN-5–12 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
 endpoints with seeded SQLite, an NBP HTTP adapter/mock, and Orders checkout with
 private SQLite snapshots. Orders atomically persists successful idempotency keys
 and replays sequential retries without dependency calls; changed payloads return
 409. Failed attempts retain no successful-key record. High-concurrency guarantees
-are not demonstrated. App factories have no standalone
-listener/environment wiring yet.
+are not demonstrated. Compose provides standalone listeners, separate persistent
+volumes and mock-NBP wiring. Contract tests use fresh in-memory stores and
+loopback listeners, not developer volumes or live NBP.
 Use Node 24.11.1 / npm 11.6.2, `npm ci`, then `npm run check` (contract lint,
-TypeScript checks, unit and API tests). See README.md and docs/decisions.md.
+TypeScript checks, unit/API tests and targeted contract examples). Also run
+`npm run test:contract` for the complete current gate; it requires `uvx` and manages
+Python 3.12 / Schemathesis 4.32.7. See README.md, docs/decisions.md and
+docs/contract-testing.md.
 
 Vitest is **unit tests only** (`tests/unit/`). Use **Playwright for API tests**
-(`tests/api/`), later integration tests, and browser E2E. Do not put API tests in
-Vitest. Compose, mocks, generated Schemathesis tests, UI and CI are later tickets;
-do not claim they already exist.
+(`tests/api/`), contract fixture/CLI orchestration (`tests/contract/`), later
+integration tests, and browser E2E. Do not put API tests in Vitest. Dedicated
+integration business scenarios, UI and CI are later tickets; do not claim they
+already exist.
 
 ## Jira MCP server
 

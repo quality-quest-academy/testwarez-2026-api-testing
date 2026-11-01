@@ -1,0 +1,11 @@
+[cache]
+enabled = false
+
+[phases.fuzzing.error-feedback]
+enabled = false
+
+# Created through HTTP in this test's private store before starting the CLI.
+# Fix this path parameter so the generated check reaches a stored snapshot;
+# isolated API tests cover unknown/malformed order IDs separately.
+[parameters]
+"path.orderId" = "${CONTRACT_ORDER_ID}"

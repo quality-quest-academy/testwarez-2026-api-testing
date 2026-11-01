@@ -4,13 +4,15 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-11)
+## Current state (KAN-12)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
   and demo-only offer-update endpoints. Playwright API tests start each Products
   app with a fresh temporary SQLite database.
 - Two authored OpenAPI **3.0.3** contracts, linting and schema-example unit tests.
+  Pinned Schemathesis checks both running APIs against fresh, private test data;
+  targeted response-breakage examples explain actionable schema diagnostics.
 - Playwright API bootstrap smoke tests, TypeScript checks and npm workspaces.
 - Orders has a configurable NBP EUR/PLN HTTP adapter and `mocks/nbp/` provides a
   deterministic table-A response plus timeout and unavailable modes.
@@ -24,8 +26,8 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
   failures leave no order or successful-key record, allowing a corrected retry.
 
 `compose.yaml` runs Products, Orders and the deterministic NBP mock with separate
-named SQLite volumes and health checks. There is no frontend, Bruno collection,
-Schemathesis execution or CI workflow yet. These arrive in later tickets.
+named SQLite volumes and health checks. There is no frontend, Bruno collection
+or CI workflow yet. These arrive in later tickets.
 
 ## Run the backend with Docker Compose
 
@@ -79,7 +81,8 @@ options. Supply `openOrdersDatabase(filename)` for durable storage and
 in-memory database, Products at `http://localhost:3001` and the live NBP URL.
 Tests always override both URLs with local HTTP stubs; they never call live NBP.
 The app closes its database on shutdown. Orders never opens Products' database,
-reserves inventory or decrements stock. Compose and environment wiring are later.
+reserves inventory or decrements stock. Compose supplies the service URLs and
+database paths through environment configuration.
 
 An existing Orders file is reopened without reseeding or rewriting history. To
 reset it, stop all processes using it and delete **only that Orders database file**
@@ -118,12 +121,17 @@ Individual commands:
 | `npm run typecheck` | Root test/tooling code and both app workspaces |
 | `npm run test:unit` | Vitest contract examples, persistence and exact-calculation units |
 | `npm run test:api` | Playwright isolated Products, Orders and NBP HTTP tests |
+| `npm run test:contract:examples` | Valid HTTP response bodies plus deliberately broken copies; no Python needed |
+| `npm run test:contract` | Schemathesis-generated checks for both APIs plus targeted examples; requires `uvx` |
 | `npm test` | Unit tests, then API tests |
 
-No `start`/`dev` command exists yet: KAN-7 exposes the Products app factory and
-KAN-8 exposes the NBP mock factory for tests, but neither chooses a persistent
-listener configuration. Tests use no live external services and have no automatic
-retries.
+For the complete current gate, run `npm run check` **and** `npm run test:contract`.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for `uvx`;
+it manages Python 3.12 and pinned Schemathesis 4.32.7. The contract command starts
+and closes its own services: there is no need to start Compose first. Initial tool downloads
+need internet; test requests never use live NBP. There are no automatic retries.
+See [contract checks](docs/contract-testing.md) for generation limits, isolation,
+diagnostics, artifacts and what schema checks cannot prove.
 
 ## Target architecture and boundaries
 
@@ -152,11 +160,11 @@ explicit reconfirmation. Money is represented as decimal strings.
 | `contracts/` | Independently readable Products and Orders OpenAPI contracts |
 | `tests/unit/` | Vitest only: pure unit/schema-tooling tests |
 | `tests/api/` | Playwright: isolated API tests with temporary stores and HTTP stubs |
+| `tests/contract/` | Schemathesis CLI orchestration/configuration and targeted response examples |
 | `docs/decisions.md` | Tool choices, contract details and deferred work |
 
-Later boundaries: `apps/frontend/` for Vite + Vanilla TS; `mocks/nbp/` for the
-provider test double; `tests/contract/` for Schemathesis and targeted API contract
-checks; `tests/integration/` for cross-service Playwright API tests;
+Later boundaries: `apps/frontend/` for Vite + Vanilla TS;
+`tests/integration/` for cross-service Playwright API tests;
 `tests/e2e/` for **one** Playwright browser flow; `bruno/` for exploration.
 These are planned folders, not delivered functionality.
 
@@ -165,9 +173,10 @@ These are planned folders, not delivered functionality.
 **Vitest is for unit tests only. Playwright is for API tests and browser E2E.**
 This keeps fast pure tests separate while using one HTTP-testing/assertion API
 for isolated services, cross-service integration and browser journeys.
-Schemathesis-generated tests are a separate required CLI stage in KAN-12;
-schema checks do not replace business assertions or prove compatibility with
-the real NBP provider. See [decisions](docs/decisions.md).
+Schemathesis-generated tests are a separate required CLI stage;
+schema checks do not replace business assertions, implement consumer-driven
+contracts or prove compatibility with the real NBP provider.
+See [contract checks](docs/contract-testing.md) and [decisions](docs/decisions.md).
 
 ## Non-goals and safety
 

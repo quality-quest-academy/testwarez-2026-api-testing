@@ -81,3 +81,16 @@ test('increments an offer version only for a real price or stock change', async 
     expect(await stockChanged.json()).toMatchObject({ id: 'offer-101', version: 5, stock: 7 });
   } finally { await api.close(); }
 });
+
+test('malformed JSON uses the documented validation error on both body endpoints', async ({ request }) => {
+  const api = await startProductsApi();
+  try {
+    for (const [method, path] of [['POST', '/offers/resolve'], ['PATCH', '/offers/offer-101']] as const) {
+      const response = await request.fetch(`${api.address}${path}`, {
+        method, headers: { 'Content-Type': 'application/json' }, data: '{',
+      });
+      expect(response.status()).toBe(400);
+      expect(await response.json()).toEqual({ code: 'VALIDATION_ERROR', message: 'Invalid request' });
+    }
+  } finally { await api.close(); }
+});

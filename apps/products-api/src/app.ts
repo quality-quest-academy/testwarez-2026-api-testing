@@ -10,7 +10,9 @@ export function buildApp({ database = openProductsDatabase(':memory:'), ...optio
   const app = Fastify(options);
 
   app.setErrorHandler((error, _request, reply) => {
-    if (typeof error === 'object' && error !== null && 'validation' in error && error.validation !== undefined) {
+    if (typeof error === 'object' && error !== null &&
+      (('validation' in error && error.validation !== undefined) ||
+        ('statusCode' in error && error.statusCode === 400))) {
       return reply.status(400).send({ code: 'VALIDATION_ERROR', message: 'Invalid request' });
     }
     return reply.send(error);

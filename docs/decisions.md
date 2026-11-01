@@ -206,6 +206,35 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   `docker compose down`; `docker compose down -v` is the explicit destructive
   reset documented in the README.
 
+## Generated and targeted contract checks (KAN-12)
+
+- `npm run test:contract` uses Playwright for private HTTP fixture lifecycle and
+  assertions, and invokes the separate **Schemathesis 4.32.7 CLI** via `uvx` with
+  Python 3.12. This reuses the approved runner without adding a Python application
+  workspace or requiring Docker for local contract checks.
+- Every test gets fresh in-memory Products/Orders SQLite stores, ephemeral
+  listeners and the NBP HTTP mock. Schemathesis selects all eight operations from
+  the original specs, runs examples + positive/negative fuzzing with seed 2026,
+  one worker and 20 fuzzing examples per operation, and checks HTTP status,
+  content type, headers, response schemas and absence of server errors. No retries,
+  coverage/stateful phase, persisted generation database/cache or adaptive schema
+  changes. Dictionary hints and a seeded Orders history ID reach meaningful data
+  without narrowing the contract. These checks are not exhaustive fuzz testing.
+- Generated negative requests exposed Products' default malformed-JSON error
+  envelope. Products now maps parser-level 400 errors to its documented validation
+  shape, with an isolated Playwright regression for POST/PATCH. The contract was
+  not relaxed to hide the mismatch.
+- Targeted Playwright examples validate actual HTTP bodies, then reject modified
+  copies with numeric money, string stock, missing fields and forbidden null.
+  The helper uses the existing Ajv/Swagger Parser dependencies and supports only
+  the current schema subset; Schemathesis provides HTTP-level generated checking.
+- `npm run check` includes the Python-free targeted examples. The complete gate
+  additionally requires `npm run test:contract` (initial uv/Python/tool downloads
+  need internet). CLI logs, JUnit and HAR artifacts make failures inspectable.
+  GitHub Actions wiring remains KAN-15. See
+  [contract-testing.md](contract-testing.md) for limits and the distinction between
+  schema conformance, business assertions and consumer-driven contracts.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

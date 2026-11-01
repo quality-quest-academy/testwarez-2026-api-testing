@@ -17,8 +17,10 @@
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces",
     "test:unit": "vitest run",
     "test:api": "playwright test",
+    "test:contract": "playwright test --config playwright.contract.config.ts",
+    "test:contract:examples": "npm run test:contract -- responses.spec.ts",
     "test": "npm run test:unit && npm run test:api",
-    "check": "npm run contracts:lint && npm run typecheck && npm test"
+    "check": "npm run contracts:lint && npm run typecheck && npm test && npm run test:contract:examples"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "13.1.0",

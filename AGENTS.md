@@ -29,9 +29,15 @@ has instead chosen to keep it gitignored; follow the owner's choice.
 
 ## Repo state
 
-No application code yet — config-only. There are no build, test, or lint commands;
-do not invent or run any. Target layout and commands will be defined per the plan
-as KAN-5+ tickets land.
+KAN-5 provides npm workspaces with two Fastify app factories, authored OpenAPI
+3.0.3 contracts and bootstrap checks. No endpoints or databases exist yet.
+Use Node 24.11.1 / npm 11.6.2, `npm ci`, then `npm run check` (contract lint,
+TypeScript checks, unit and API tests). See README.md and docs/decisions.md.
+
+Vitest is **unit tests only** (`tests/unit/`). Use **Playwright for API tests**
+(`tests/api/`), later integration tests, and browser E2E. Do not put API tests in
+Vitest. Compose, mocks, generated Schemathesis tests, UI and CI are later tickets;
+do not claim they already exist.
 
 ## Jira MCP server
 

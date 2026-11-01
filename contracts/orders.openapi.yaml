@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: Orders API
+  version: 0.2.0
+  description: >-
+    Contract-first checkout demo; endpoints are not implemented yet.
+    Orders resolves offers over HTTP and obtains one last-published NBP table A
+    EUR/PLN mid rate per new successful checkout. It owns a separate SQLite
+    database. Client prices are expectations, not trusted amounts.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit/
+servers:
+  - url: http://localhost:3002
+    description: Planned local Orders service
+tags:
+  - name: Health
+    description: Service readiness
+  - name: Orders
+    description: Checkout and immutable historical snapshots
+paths:
+  /health:
+    get:
+      operationId: getOrdersHealth
+      summary: Check readiness
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example: { status: ok }
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Validate all cart items and create an order atomically
+      description: >-
+        Resolve all offers with one Products batch request. Missing offers
+        (including Products 404) map to 409 OFFER_UNAVAILABLE. Reject stale
+        prices/versions and insufficient stock without writing an order.
+        Use exact decimal arithmetic: subtotalEUR = sum(quantity * unitPrice);
+        total = round_half_up(subtotalEUR * exchangeRate, 2).
+        A changed indicative browser FX rate alone does not cause a conflict.
+        Persist the order snapshot and successful idempotency record in one
+        transaction. Sequential replay with the same key and identical payload
+        returns the stored 201 body and Location with no dependency calls or FX
+        recalculation; changed payload returns 409 IDEMPOTENCY_KEY_REUSED.
+        Failed requests retain no successful-key record. No stock reservation,
+        stock decrement, in-flight duplicate protocol or high-concurrency
+        idempotency guarantees are demonstrated.
+      tags: [Orders]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Client-generated key for one sequential checkout attempt
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+          example: checkout-attempt-0001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              items:
+                - offerId: offer-101
+                  quantity: 2
+                  expectedUnitPrice: '89.00'
+                  expectedOfferVersion: 3
+                - offerId: offer-205
+                  quantity: 1
+                  expectedUnitPrice: '35.00'
+                  expectedOfferVersion: 2
+      responses:
+        '201':
+          description: Created order, or the stored response on successful sequential replay
+          headers:
+            Location:
+              description: Relative URL of the stored order
+              required: true
+              schema:
+                type: string
+                pattern: '^/orders/[^/]+$'
+              example: /orders/order-001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '409':
+          description: Business conflict; no new order or successful-key record is written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
+              examples:
+                changed:
+                  summary: Explicit reconfirmation is required
+                  value:
+                    code: OFFER_CHANGED
+                    message: Reconfirm current offer prices and versions
+                    changes:
+                      - offerId: offer-101
+                        expectedUnitPrice: '89.00'
+                        expectedOfferVersion: 3
+                        currentUnitPrice: '90.00'
+                        currentOfferVersion: 4
+                unavailable:
+                  value:
+                    code: OFFER_UNAVAILABLE
+                    message: Offers are missing or have insufficient stock
+                    offerIds: [offer-missing]
+                reusedKey:
+                  value:
+                    code: IDEMPOTENCY_KEY_REUSED
+                    message: Key was already used with a different payload
+        '503':
+          description: Products or NBP timed out, failed, or returned unusable data; no order is written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DependencyError'
+              example: { code: DEPENDENCY_UNAVAILABLE, message: NBP is unavailable }
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Identifier'
+    get:
+      operationId: getOrder
+      summary: Retrieve the stored historical snapshot
+      description: Never calls Products or NBP; subsequent offer and FX changes cannot alter this response.
+      tags: [Orders]
+      responses:
+        '200':
+          description: Immutable order snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          description: Order does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example: { code: NOT_FOUND, message: Order not found }
+components:
+  responses:
+    InvalidRequest:
+      description: Invalid body, duplicate offer IDs, path parameter or Idempotency-Key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+          example: { code: VALIDATION_ERROR, message: Invalid request }
+  schemas:
+    Identifier:
+      type: string
+      minLength: 1
+    Money:
+      type: string
+      pattern: '^(0|[1-9][0-9]*)\.[0-9]{2}$'
+      description: Nonnegative decimal amount with exactly two fractional digits
+      example: '213.00'
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    CreateOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 30
+          uniqueItems: true
+          description: >-
+            offerId must be unique across items, even when quantities or price
+            expectations differ. OpenAPI 3.0 uniqueItems only rejects identical
+            objects; the service must additionally enforce uniqueness by offerId.
+          items:
+            $ref: '#/components/schemas/CreateOrderItem'
+    CreateOrderItem:
+      type: object
+      additionalProperties: false
+      required: [offerId, quantity, expectedUnitPrice, expectedOfferVersion]
+      properties:
+        offerId:
+          $ref: '#/components/schemas/Identifier'
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        expectedUnitPrice:
+          $ref: '#/components/schemas/Money'
+        expectedOfferVersion:
+          type: integer
+          minimum: 1
+    Order:
+      type: object
+      additionalProperties: false
+      required: [id, status, currency, subtotalEUR, exchangeRate, exchangeRateDate, total, createdAt, items]
+      properties:
+        id:
+          $ref: '#/components/schemas/Identifier'
+        status:
+          type: string
+          enum: [CREATED]
+        currency:
+          type: string
+          enum: [PLN]
+        subtotalEUR:
+          $ref: '#/components/schemas/Money'
+        exchangeRate:
+          type: string
+          pattern: '^(0\.(?!0000)[0-9]{4}|[1-9][0-9]*\.[0-9]{4})$'
+          description: Positive NBP EUR/PLN mid rate formatted to four fractional digits
+        exchangeRateDate:
+          type: string
+          format: date
+        total:
+          $ref: '#/components/schemas/Money'
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/OrderItem'
+      example:
+        id: order-001
+        status: CREATED
+        currency: PLN
+        subtotalEUR: '213.00'
+        exchangeRate: '4.3000'
+        exchangeRateDate: '2026-10-21'
+        total: '915.90'
+        createdAt: '2026-10-21T12:00:00Z'
+        items:
+          - offerId: offer-101
+            productName: Demo keyboard
+            quantity: 2
+            unitPrice: '89.00'
+            currency: EUR
+            lineTotal: '178.00'
+          - offerId: offer-205
+            productName: Demo mouse
+            quantity: 1
+            unitPrice: '35.00'
+            currency: EUR
+            lineTotal: '35.00'
+    OrderItem:
+      type: object
+      additionalProperties: false
+      required: [offerId, productName, quantity, unitPrice, currency, lineTotal]
+      properties:
+        offerId:
+          $ref: '#/components/schemas/Identifier'
+        productName:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        unitPrice:
+          $ref: '#/components/schemas/Money'
+        currency:
+          type: string
+          enum: [EUR]
+        lineTotal:
+          $ref: '#/components/schemas/Money'
+    ConflictError:
+      description: Closed error variants avoid allOf/additionalProperties conflicts for changes.
+      oneOf:
+        - $ref: '#/components/schemas/OfferChangedError'
+        - $ref: '#/components/schemas/OfferUnavailableError'
+        - $ref: '#/components/schemas/IdempotencyError'
+    OfferChangedError:
+      type: object
+      additionalProperties: false
+      required: [code, message, changes]
+      properties:
+        code:
+          type: string
+          enum: [OFFER_CHANGED]
+        message:
+          type: string
+          minLength: 1
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/OfferChange'
+    OfferChange:
+      type: object
+      additionalProperties: false
+      required: [offerId, expectedUnitPrice, expectedOfferVersion, currentUnitPrice, currentOfferVersion]
+      properties:
+        offerId:
+          $ref: '#/components/schemas/Identifier'
+        expectedUnitPrice:
+          $ref: '#/components/schemas/Money'
+        expectedOfferVersion:
+          type: integer
+          minimum: 1
+        currentUnitPrice:
+          $ref: '#/components/schemas/Money'
+        currentOfferVersion:
+          type: integer
+          minimum: 1
+    OfferUnavailableError:
+      type: object
+      additionalProperties: false
+      required: [code, message, offerIds]
+      properties:
+        code:
+          type: string
+          enum: [OFFER_UNAVAILABLE]
+        message:
+          type: string
+          minLength: 1
+        offerIds:
+          type: array
+          minItems: 1
+          maxItems: 30
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Identifier'
+    IdempotencyError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [IDEMPOTENCY_KEY_REUSED]
+        message:
+          type: string
+          minLength: 1
+    ValidationError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [VALIDATION_ERROR]
+        message:
+          type: string
+          minLength: 1
+    DependencyError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [DEPENDENCY_UNAVAILABLE]
+        message:
+          type: string
+          minLength: 1
+    NotFoundError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [NOT_FOUND]
+        message:
+          type: string
+          minLength: 1

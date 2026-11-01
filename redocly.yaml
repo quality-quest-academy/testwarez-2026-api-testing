@@ -1,0 +1,9 @@
+extends:
+  - recommended-strict
+rules:
+  # Local educational APIs deliberately have no authentication in MVP.
+  security-defined: off
+  # Local-only demo URLs are intentional, not placeholder production hosts.
+  no-server-example.com: off
+  # Readiness and catalog listing have no client-input failure to invent.
+  operation-4xx-response: off

@@ -1,0 +1,313 @@
+openapi: 3.0.3
+info:
+  title: Products API
+  version: 0.2.0
+  description: >-
+    Contract-first catalog and supplier offers for the educational demo.
+    This specification precedes endpoint implementation. Products owns its
+    SQLite database; consumers must use HTTP, never direct database access.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit/
+servers:
+  - url: http://localhost:3001
+    description: Planned local Products service
+tags:
+  - name: Health
+    description: Service readiness
+  - name: Catalog
+    description: Products and supplier offers
+paths:
+  /health:
+    get:
+      operationId: getProductsHealth
+      summary: Check readiness
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example: { status: ok }
+  /products:
+    get:
+      operationId: listProducts
+      summary: List products with nested supplier offers
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Catalog, including unavailable offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+              example:
+                - id: prod-001
+                  name: Demo keyboard
+                  description: A keyboard with multiple supplier offers
+                  offers:
+                    - id: offer-101
+                      productId: prod-001
+                      productName: Demo keyboard
+                      supplierId: supplier-alpha
+                      supplierName: Alpha
+                      price: '89.00'
+                      currency: EUR
+                      stock: 8
+                      version: 3
+                    - id: offer-102
+                      productId: prod-001
+                      productName: Demo keyboard
+                      supplierId: supplier-beta
+                      supplierName: Beta
+                      price: '91.00'
+                      currency: EUR
+                      stock: 0
+                      version: 1
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Identifier'
+    get:
+      operationId: getProduct
+      summary: Get a product and its supplier offers
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /offers/resolve:
+    post:
+      operationId: resolveOffers
+      summary: Resolve current offers in one batch
+      description: >-
+        Returns offers in requested order, including productName for checkout
+        snapshots. If any ID is missing, returns 404 with all missing IDs and
+        no partial result. Does not reserve or decrement stock.
+      tags: [Catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveOffersRequest'
+            example: { offerIds: [offer-101, offer-205] }
+      responses:
+        '200':
+          description: All requested offers, in requested order
+          content:
+            application/json:
+              schema:
+                type: array
+                minItems: 1
+                maxItems: 30
+                items:
+                  $ref: '#/components/schemas/Offer'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          description: One or more requested offers do not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissingOffersError'
+              example:
+                code: NOT_FOUND
+                message: Requested offers do not exist
+                offerIds: [offer-missing]
+  /offers/{offerId}:
+    parameters:
+      - name: offerId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Identifier'
+    patch:
+      operationId: updateOffer
+      summary: Update offer price or stock for the local demo
+      description: >-
+        Demo administration only: disable or protect outside local/test use.
+        At least one of price or stock is required. Increment version once
+        on a real price/stock change; a no-op preserves the version.
+      tags: [Catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOfferRequest'
+            example: { price: '90.00', stock: 7 }
+      responses:
+        '200':
+          description: Current offer after applying the update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  responses:
+    InvalidRequest:
+      description: Invalid path parameter or request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+          example: { code: VALIDATION_ERROR, message: Invalid request }
+    NotFound:
+      description: Requested product or offer does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotFoundError'
+          example: { code: NOT_FOUND, message: Resource not found }
+  schemas:
+    Identifier:
+      type: string
+      minLength: 1
+    Money:
+      type: string
+      pattern: '^(0|[1-9][0-9]*)\.[0-9]{2}$'
+      description: Nonnegative decimal amount, exactly two fractional digits
+      example: '89.00'
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Product:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, offers]
+      properties:
+        id:
+          $ref: '#/components/schemas/Identifier'
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Offer'
+    Offer:
+      type: object
+      additionalProperties: false
+      required: [id, productId, productName, supplierId, supplierName, price, currency, stock, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Identifier'
+        productId:
+          $ref: '#/components/schemas/Identifier'
+        productName:
+          type: string
+          minLength: 1
+          description: Product name supplied for the immutable checkout snapshot
+        supplierId:
+          $ref: '#/components/schemas/Identifier'
+        supplierName:
+          type: string
+          minLength: 1
+        price:
+          $ref: '#/components/schemas/Money'
+        currency:
+          type: string
+          enum: [EUR]
+        stock:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          minimum: 1
+      example:
+        id: offer-101
+        productId: prod-001
+        productName: Demo keyboard
+        supplierId: supplier-alpha
+        supplierName: Alpha
+        price: '89.00'
+        currency: EUR
+        stock: 8
+        version: 3
+    ResolveOffersRequest:
+      type: object
+      additionalProperties: false
+      required: [offerIds]
+      properties:
+        offerIds:
+          type: array
+          minItems: 1
+          maxItems: 30
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Identifier'
+    UpdateOfferRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        price:
+          $ref: '#/components/schemas/Money'
+        stock:
+          type: integer
+          minimum: 0
+    ValidationError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [VALIDATION_ERROR]
+        message:
+          type: string
+          minLength: 1
+    NotFoundError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [NOT_FOUND]
+        message:
+          type: string
+          minLength: 1
+    MissingOffersError:
+      type: object
+      additionalProperties: false
+      required: [code, message, offerIds]
+      properties:
+        code:
+          type: string
+          enum: [NOT_FOUND]
+        message:
+          type: string
+          minLength: 1
+        offerIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Identifier'

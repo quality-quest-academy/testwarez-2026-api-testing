@@ -3,3 +3,16 @@
 
 # Local planning documents (never published or committed; owner-controlled)
 Implementation Plan.md
+
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Service-owned local databases
+*.db
+*.db-shm
+*.db-wal

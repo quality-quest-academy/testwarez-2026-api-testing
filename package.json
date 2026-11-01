@@ -1,0 +1,33 @@
+{
+  "name": "testwarez-2026-api-testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24.11.0 <25",
+    "npm": ">=11 <12"
+  },
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "contracts:lint": "redocly lint contracts/products.openapi.yaml contracts/orders.openapi.yaml",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspaces",
+    "test:unit": "vitest run",
+    "test:api": "playwright test",
+    "test": "npm run test:unit && npm run test:api",
+    "check": "npm run contracts:lint && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "13.1.0",
+    "@playwright/test": "1.64.1",
+    "@redocly/cli": "2.72.1",
+    "@types/node": "24.19.2",
+    "ajv-draft-04": "1.0.0",
+    "ajv-formats": "3.0.1",
+    "openapi-types": "12.1.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

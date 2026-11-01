@@ -235,6 +235,37 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   [contract-testing.md](contract-testing.md) for limits and the distinction between
   schema conformance, business assertions and consumer-driven contracts.
 
+## Backend integration tests (KAN-13)
+
+- `npm run test:integration` uses a separate Playwright config so isolated API,
+  contract and business integration checks remain independently selectable.
+  `npm test` and `npm run check` include the integration suite; no new dependency,
+  Docker or browser binary is needed for this local feedback loop.
+- Each test starts the real Products and Orders app factories on ephemeral
+  loopback listeners, with two distinct SQLite files in a unique temporary
+  directory. Products initializes its own deterministic seed; Orders starts
+  empty. Both HTTP client URLs are explicitly injected, with NBP pointing only
+  at the existing fixture-backed HTTP mock. No service sees the other's store.
+- Setup/reset is test-scoped, not shared across workers or scenarios. Teardown
+  attempts all listener/database closures and removes the private files even
+  after an assertion/setup failure. Parallel tests reuse the same offer IDs and
+  idempotency key safely because their mutable state is independent. No sleeps,
+  blanket retries, public NBP, `.env` loading or developer volumes.
+- Business scenarios build a cart from the HTTP catalog and verify the complete
+  multi-item order, exact fixture total, Location and stored-history retrieval.
+  Two conflict variants mutate the second offer through Products PATCH: a new
+  price/version and a stock-only version increment. Orders must reject stale
+  expectations with reconfirmation details, skip NBP and persist neither an
+  order nor a successful key. Re-fetching and explicitly accepting the new
+  expectations allows a corrected retry with the same failed key.
+- Lightweight observation hooks count real batch-resolution/FX requests without
+  replacing routes or responses. Test-only reads of Orders' own database prove
+  no partial writes; application code remains independent of the other store.
+- This suite demonstrates real HTTP service integration and business behavior,
+  not container startup, a browser journey, high-concurrency idempotency or
+  live-provider compatibility. Compose-based ephemeral CI execution remains
+  KAN-15; browser E2E remains KAN-14.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

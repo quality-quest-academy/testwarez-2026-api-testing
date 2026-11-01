@@ -4,7 +4,7 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-12)
+## Current state (KAN-13)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
@@ -24,6 +24,9 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
   retries replay the original response without dependency calls; changed payloads
   under the same key return `409 IDEMPOTENCY_KEY_REUSED`. Conflicts and dependency
   failures leave no order or successful-key record, allowing a corrected retry.
+- Playwright integration tests run both real APIs over HTTP with separate fresh
+  SQLite files and the NBP mock. They verify multi-item checkout, stale price and
+  version rejection, no partial writes, and explicit reconfirmation before retry.
 
 `compose.yaml` runs Products, Orders and the deterministic NBP mock with separate
 named SQLite volumes and health checks. There is no frontend, Bruno collection
@@ -79,7 +82,7 @@ options. Supply `openOrdersDatabase(filename)` for durable storage and
 `products: { baseUrl }` / `nbp: { baseUrl }` for dependency HTTP configuration
 (both clients also accept `timeoutMs`). Without options, Orders uses an empty
 in-memory database, Products at `http://localhost:3001` and the live NBP URL.
-Tests always override both URLs with local HTTP stubs; they never call live NBP.
+Tests always override both URLs with local HTTP dependencies; they never call live NBP.
 The app closes its database on shutdown. Orders never opens Products' database,
 reserves inventory or decrements stock. Compose supplies the service URLs and
 database paths through environment configuration.
@@ -121,9 +124,10 @@ Individual commands:
 | `npm run typecheck` | Root test/tooling code and both app workspaces |
 | `npm run test:unit` | Vitest contract examples, persistence and exact-calculation units |
 | `npm run test:api` | Playwright isolated Products, Orders and NBP HTTP tests |
+| `npm run test:integration` | Real Products + Orders, separate fresh SQLite files, HTTP NBP mock |
 | `npm run test:contract:examples` | Valid HTTP response bodies plus deliberately broken copies; no Python needed |
 | `npm run test:contract` | Schemathesis-generated checks for both APIs plus targeted examples; requires `uvx` |
-| `npm test` | Unit tests, then API tests |
+| `npm test` | Unit tests, then isolated API and backend integration tests |
 
 For the complete current gate, run `npm run check` **and** `npm run test:contract`.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for `uvx`;
@@ -132,6 +136,42 @@ and closes its own services: there is no need to start Compose first. Initial to
 need internet; test requests never use live NBP. There are no automatic retries.
 See [contract checks](docs/contract-testing.md) for generation limits, isolation,
 diagnostics, artifacts and what schema checks cannot prove.
+
+### Backend integration tests
+
+```sh
+npm run test:integration
+```
+
+No running Compose stack or manual reset is needed. Each test creates a private
+temporary directory with separate `products.db` (automatically seeded) and
+`orders.db` (empty), starts real Products/Orders and the NBP mock on ephemeral
+loopback ports, and closes them and removes its files afterward, including on
+failure. Tests never use developer databases, volumes, `.env` or public NBP.
+They can run individually, in any order or in parallel with no shared mutable
+state and no retries. `npm run check` includes them.
+
+The scenarios read accepted cart prices/versions from Products over HTTP, then
+verify `213.00 EUR × 4.3000 = 915.90 PLN` and retrieval of the saved order. Conflict
+scenarios update Products through its demo PATCH endpoint (price + version, or
+stock changing only the version), assert `409 OFFER_CHANGED` with current values,
+zero Orders/idempotency writes and no FX lookup, then explicitly reconfirm and
+successfully retry. Only the test harness inspects Orders' private store to prove
+no partial writes; the services communicate exclusively over HTTP.
+
+These are controlled backend integration tests, not proof of live-NBP
+compatibility, browser behavior or container configuration. Local tests run the
+real app factories/listeners in Playwright workers; Compose-based CI orchestration
+remains KAN-15. See [decisions](docs/decisions.md#backend-integration-tests-kan-13).
+
+On Windows with pinned Node 24.11.1, parallel workers have printed
+`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` at shutdown after all
+tests passed (the command returned 0). This matches a reported
+[Node shutdown issue](https://github.com/nodejs/node/issues/56645); it is not a
+business assertion failure, but should not be mistaken for clean worker shutdown.
+A diagnostic run with `npm run test:integration -- --workers=1` was clean.
+The default remains parallel with zero retries; no sleeps or suppressed errors
+were added to hide the runtime symptom.
 
 ## Target architecture and boundaries
 
@@ -161,10 +201,10 @@ explicit reconfirmation. Money is represented as decimal strings.
 | `tests/unit/` | Vitest only: pure unit/schema-tooling tests |
 | `tests/api/` | Playwright: isolated API tests with temporary stores and HTTP stubs |
 | `tests/contract/` | Schemathesis CLI orchestration/configuration and targeted response examples |
+| `tests/integration/` | Playwright real Products/Orders checkout and stale-cart scenarios |
 | `docs/decisions.md` | Tool choices, contract details and deferred work |
 
 Later boundaries: `apps/frontend/` for Vite + Vanilla TS;
-`tests/integration/` for cross-service Playwright API tests;
 `tests/e2e/` for **one** Playwright browser flow; `bruno/` for exploration.
 These are planned folders, not delivered functionality.
 

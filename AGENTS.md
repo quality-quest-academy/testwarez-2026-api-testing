@@ -29,7 +29,7 @@ has instead chosen to keep it gitignored; follow the owner's choice.
 
 ## Repo state
 
-KAN-5–12 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
+KAN-5–13 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
 endpoints with seeded SQLite, an NBP HTTP adapter/mock, and Orders checkout with
 private SQLite snapshots. Orders atomically persists successful idempotency keys
 and replays sequential retries without dependency calls; changed payloads return
@@ -44,10 +44,14 @@ Python 3.12 / Schemathesis 4.32.7. See README.md, docs/decisions.md and
 docs/contract-testing.md.
 
 Vitest is **unit tests only** (`tests/unit/`). Use **Playwright for API tests**
-(`tests/api/`), contract fixture/CLI orchestration (`tests/contract/`), later
-integration tests, and browser E2E. Do not put API tests in Vitest. Dedicated
-integration business scenarios, UI and CI are later tickets; do not claim they
-already exist.
+(`tests/api/`), contract fixture/CLI orchestration (`tests/contract/`), integration
+tests (`tests/integration/`), and later browser E2E. Do not put API tests in Vitest.
+`npm run test:integration` runs real Products/Orders HTTP listeners with separate
+fresh temporary SQLite files and the NBP mock per test, proving multi-item
+checkout and stale price/version rejection followed by explicit reconfirmation.
+It is included in `npm test` / `npm run check`. Local integration tests do not
+exercise Compose; Compose-based CI orchestration, UI and browser E2E are later
+tickets. Do not claim those already exist.
 
 ## Jira MCP server
 

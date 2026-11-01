@@ -17,9 +17,10 @@
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces",
     "test:unit": "vitest run",
     "test:api": "playwright test",
+    "test:integration": "playwright test --config playwright.integration.config.ts",
     "test:contract": "playwright test --config playwright.contract.config.ts",
     "test:contract:examples": "npm run test:contract -- responses.spec.ts",
-    "test": "npm run test:unit && npm run test:api",
+    "test": "npm run test:unit && npm run test:api && npm run test:integration",
     "check": "npm run contracts:lint && npm run typecheck && npm test && npm run test:contract:examples"
   },
   "devDependencies": {

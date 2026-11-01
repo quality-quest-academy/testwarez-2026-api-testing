@@ -4,20 +4,26 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-8)
+## Current state (KAN-9)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
   and demo-only offer-update endpoints. Playwright API tests start each Products
-  app with a fresh temporary SQLite database. The Orders app remains a route- and
-  persistence-free factory.
+  app with a fresh temporary SQLite database.
 - Two authored OpenAPI **3.0.3** contracts, linting and schema-example unit tests.
 - Playwright API bootstrap smoke tests, TypeScript checks and npm workspaces.
 - Orders has a configurable NBP EUR/PLN HTTP adapter and `mocks/nbp/` provides a
   deterministic table-A response plus timeout and unavailable modes. It is not an
-  Orders endpoint or a Compose service yet.
+  Compose service yet.
+- Orders implements `/health`, `POST /orders` and `GET /orders/{orderId}` with
+  private SQLite snapshots, one Products batch request and one NBP rate per new
+  checkout. Decimal calculations produce `213.00 EUR × 4.3000 = 915.90 PLN`.
+  Historical reads never call dependencies, including after reopening the file.
+  The required `Idempotency-Key` is validated but **not retained/replayed yet**;
+  repeated submissions can create duplicate orders until KAN-10. Basic offer
+  guards exist; comprehensive conflicts/failures and idempotency are KAN-10 work.
 
-The contracts describe **planned behavior**, not working APIs. There is no
+The contracts include **planned behavior**, notably Orders idempotency. There is no
 frontend, Compose stack, Bruno collection, Schemathesis execution or CI workflow
 yet. These arrive in later tickets.
 
@@ -38,6 +44,21 @@ The service/Compose database location is deliberately deferred to the tickets
 that add that configuration. Do not delete a data volume unless a full reset is
 intended.
 
+## Orders persistence and configuration
+
+`buildApp` in `apps/orders-api/src/app.ts` accepts `database`, `products` and `nbp`
+options. Supply `openOrdersDatabase(filename)` for durable storage and
+`products: { baseUrl }` / `nbp: { baseUrl }` for dependency HTTP configuration
+(both clients also accept `timeoutMs`). Without options, Orders uses an empty
+in-memory database, Products at `http://localhost:3001` and the live NBP URL.
+Tests always override both URLs with local HTTP stubs; they never call live NBP.
+The app closes its database on shutdown. Orders never opens Products' database,
+reserves inventory or decrements stock. Compose and environment wiring are later.
+
+An existing Orders file is reopened without reseeding or rewriting history. To
+reset it, stop all processes using it and delete **only that Orders database file**
+and its optional `-wal`/`-shm` files. This permanently deletes saved orders.
+
 ## Local checks
 
 Use Node.js **24.11.1** (see `.node-version`) and npm **11.6.2**. No credentials,
@@ -54,8 +75,8 @@ Individual commands:
 | --- | --- |
 | `npm run contracts:lint` | Both OpenAPI specs with Redocly recommended-strict rules |
 | `npm run typecheck` | Root test/tooling code and both app workspaces |
-| `npm run test:unit` | Vitest schema-tooling unit tests, including contract examples |
-| `npm run test:api` | Playwright HTTP smoke tests against isolated temporary app listeners |
+| `npm run test:unit` | Vitest contract examples, persistence and exact-calculation units |
+| `npm run test:api` | Playwright isolated Products, Orders and NBP HTTP tests |
 | `npm test` | Unit tests, then API tests |
 
 No `start`/`dev` command exists yet: KAN-7 exposes the Products app factory and
@@ -84,12 +105,12 @@ explicit reconfirmation. Money is represented as decimal strings.
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/products-api/` | Products Fastify factory; catalog persistence and endpoints later |
-| `apps/orders-api/` | Orders Fastify factory; checkout persistence and endpoints later |
+| `apps/products-api/` | Products Fastify factory, catalog persistence and endpoints |
+| `apps/orders-api/` | Orders Fastify factory, HTTP clients, calculations and snapshots |
 | `mocks/nbp/` | Configurable NBP table-A EUR/PLN HTTP test double and fixture |
 | `contracts/` | Independently readable Products and Orders OpenAPI contracts |
 | `tests/unit/` | Vitest only: pure unit/schema-tooling tests |
-| `tests/api/` | Playwright: isolated API tests (bootstrap smoke tests currently) |
+| `tests/api/` | Playwright: isolated API tests with temporary stores and HTTP stubs |
 | `docs/decisions.md` | Tool choices, contract details and deferred work |
 
 Later boundaries: `apps/frontend/` for Vite + Vanilla TS; `mocks/nbp/` for the

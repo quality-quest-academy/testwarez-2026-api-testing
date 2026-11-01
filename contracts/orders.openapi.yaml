@@ -3,7 +3,8 @@ info:
   title: Orders API
   version: 0.2.0
   description: >-
-    Contract-first checkout demo; endpoints are not implemented yet.
+    Contract-first checkout demo. Checkout and stored history are implemented;
+    successful-key persistence and sequential replay are planned for KAN-10.
     Orders resolves offers over HTTP and obtains one last-published NBP table A
     EUR/PLN mid rate per new successful checkout. It owns a separate SQLite
     database. Client prices are expectations, not trusted amounts.

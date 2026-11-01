@@ -123,6 +123,37 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   success, delayed-response and 503 modes deliberately exercise the real adapter
   over HTTP. Compose wiring and a live-NBP compatibility smoke remain later work.
 
+## Orders checkout and snapshots (KAN-9)
+
+- Orders owns a separate `node:sqlite` database. `openOrdersDatabase(filename)`
+  creates an empty store or reopens existing history. `buildApp` defaults to an
+  in-memory store and closes the supplied store on shutdown, like Products.
+- One `orders` row stores an entire JSON snapshot, including ordered line items.
+  A single SQLite INSERT is atomic for the complete cart; no partially written
+  order/items are possible. There is no update route. Historical GET only reads
+  this snapshot and never resolves current offers or FX. Separate item tables
+  would add joins without a query requirement in this small demo.
+- `ProductsClient` is Orders-owned, with no imports from Products persistence.
+  One HTTP batch call resolves all requested IDs in order. The adapter validates
+  the fields used at checkout and rejects unusable responses. Products and NBP
+  URLs/timeouts are injected through app options, not read on import.
+- `decimal.js` now implements exact line/subtotal arithmetic and final PLN
+  half-up rounding. Precision scales with input size because the Money contract
+  does not bound the number of integer digits. Do not round converted lines;
+  convert the combined EUR subtotal once with one NBP rate.
+- Request validation rejects coercion, extra body fields and duplicate offer IDs.
+  Minimal stale-price/version and availability guards prevent accepting an
+  unsafe cart in this increment. Dependency errors map to 503; the full conflict,
+  failure/no-partial-write coverage remains KAN-10.
+- **Idempotency is not implemented by KAN-9.** The required header is validated,
+  but repeats can create duplicates. KAN-10 must persist successful-key records
+  atomically with order creation and demonstrate all three sequential behaviors.
+  The existing contract documents that target; it does not prove it exists yet.
+- Playwright tests use temporary Orders files and local Products/NBP HTTP stubs.
+  They demonstrate totals, final-only rounding, input rejection, immutable history
+  after dependency changes, and history after reopening the database with
+  unreachable dependency URLs. They are not real-Products integration tests.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

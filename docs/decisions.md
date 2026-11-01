@@ -96,6 +96,19 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   or environment configuration. KAN-7 will consume this service-owned data
   layer; KAN-11 will choose the container data path and volume.
 
+## Products endpoints (KAN-7)
+
+- `buildApp` accepts an optional service-owned `ProductsDatabase`; when omitted,
+  it creates a seeded in-memory SQLite database. The application closes that
+  database with its Fastify instance. This keeps imports free of environment
+  configuration and lets isolated API tests provide a distinct temporary file.
+- Products routes map their public HTTP data to joined product/supplier/offer
+  records. Batch resolution preserves caller order and returns no partial result
+  when one or more offer IDs are missing. PATCH increments the offer version once
+  only when price or stock actually changes.
+- Fastify route schemas enforce the OpenAPI request constraints. Validation
+  failures use the contract's `VALIDATION_ERROR` response shape.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

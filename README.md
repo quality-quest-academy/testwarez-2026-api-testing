@@ -4,12 +4,13 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-6)
+## Current state (KAN-7)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
-  and offer seed data. It has no routes or listener yet; tests open isolated
-  database files directly. The Orders app remains a route- and persistence-free
-  factory.
+  and offer seed data, and implements its health, catalog, batch offer-resolution
+  and demo-only offer-update endpoints. Playwright API tests start each Products
+  app with a fresh temporary SQLite database. The Orders app remains a route- and
+  persistence-free factory.
 - Two authored OpenAPI **3.0.3** contracts, linting and schema-example unit tests.
 - Playwright API bootstrap smoke tests, TypeScript checks and npm workspaces.
 
@@ -54,8 +55,9 @@ Individual commands:
 | `npm run test:api` | Playwright HTTP smoke tests against isolated temporary app listeners |
 | `npm test` | Unit tests, then API tests |
 
-No `start`/`dev` command exists yet: bootstrap does not deliver functional
-services. Tests use no live external services and have no automatic retries.
+No `start`/`dev` command exists yet: KAN-7 exposes the Products app factory for
+tests but does not choose a persistent service database location or listener
+configuration. Tests use no live external services and have no automatic retries.
 
 ## Target architecture and boundaries
 

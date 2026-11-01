@@ -11,6 +11,8 @@ export type Offer = {
   stock: number;
   version: number;
 };
+export type ResolvedOffer = Offer & { productName: string; supplierName: string };
+export type ProductWithOffers = Product & { offers: ResolvedOffer[] };
 export type SeededProducts = { products: Product[]; suppliers: Supplier[]; offers: Offer[] };
 
 const seed: SeededProducts = {
@@ -48,6 +50,70 @@ export class ProductsDatabase {
       suppliers: this.connection.prepare('SELECT id, name FROM suppliers ORDER BY id').all() as Supplier[],
       offers: this.connection.prepare('SELECT id, product_id AS productId, supplier_id AS supplierId, price, currency, stock, version FROM offers ORDER BY id').all() as Offer[],
     };
+  }
+
+  listProducts(): ProductWithOffers[] {
+    const products = this.connection.prepare(
+      'SELECT id, name, description FROM products ORDER BY id',
+    ).all() as Product[];
+    return products.map((product) => ({
+      ...product,
+      offers: this.findOffersForProduct(product.id),
+    }));
+  }
+
+  findProduct(id: string): ProductWithOffers | undefined {
+    const product = this.connection.prepare(
+      'SELECT id, name, description FROM products WHERE id = ?',
+    ).get(id) as Product | undefined;
+    return product === undefined ? undefined : { ...product, offers: this.findOffersForProduct(product.id) };
+  }
+
+  resolveOffers(offerIds: string[]): { offers: ResolvedOffer[]; missingOfferIds: string[] } {
+    const offers: ResolvedOffer[] = [];
+    const missingOfferIds: string[] = [];
+    const findOffer = this.connection.prepare(`
+      SELECT offers.id, offers.product_id AS productId, products.name AS productName,
+             offers.supplier_id AS supplierId, suppliers.name AS supplierName,
+             offers.price, offers.currency, offers.stock, offers.version
+      FROM offers
+      JOIN products ON products.id = offers.product_id
+      JOIN suppliers ON suppliers.id = offers.supplier_id
+      WHERE offers.id = ?
+    `);
+    for (const id of offerIds) {
+      const offer = findOffer.get(id) as ResolvedOffer | undefined;
+      if (offer === undefined) missingOfferIds.push(id);
+      else offers.push(offer);
+    }
+    return { offers, missingOfferIds };
+  }
+
+  updateOffer(id: string, update: { price?: string; stock?: number }): ResolvedOffer | undefined {
+    const current = this.resolveOffers([id]).offers[0];
+    if (current === undefined) return undefined;
+
+    const price = update.price ?? current.price;
+    const stock = update.stock ?? current.stock;
+    if (price !== current.price || stock !== current.stock) {
+      this.connection.prepare(
+        'UPDATE offers SET price = ?, stock = ?, version = version + 1 WHERE id = ?',
+      ).run(price, stock, id);
+    }
+    return this.resolveOffers([id]).offers[0];
+  }
+
+  private findOffersForProduct(productId: string): ResolvedOffer[] {
+    return this.connection.prepare(`
+      SELECT offers.id, offers.product_id AS productId, products.name AS productName,
+             offers.supplier_id AS supplierId, suppliers.name AS supplierName,
+             offers.price, offers.currency, offers.stock, offers.version
+      FROM offers
+      JOIN products ON products.id = offers.product_id
+      JOIN suppliers ON suppliers.id = offers.supplier_id
+      WHERE offers.product_id = ?
+      ORDER BY offers.id
+    `).all(productId) as ResolvedOffer[];
   }
 
   private createSchema() {

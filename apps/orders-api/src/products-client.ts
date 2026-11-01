@@ -53,6 +53,7 @@ export class ProductsClient {
       });
       const body: unknown = await response.json();
       if (response.status === 404 && typeof body === 'object' && body !== null &&
+        'code' in body && body.code === 'NOT_FOUND' &&
         'offerIds' in body && Array.isArray(body.offerIds) && body.offerIds.length > 0 &&
         body.offerIds.every((id) => typeof id === 'string' && offerIds.includes(id))) {
         throw new ProductsClientError('Offers no longer exist', [...new Set(body.offerIds as string[])]);

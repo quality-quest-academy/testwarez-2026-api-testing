@@ -79,7 +79,7 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   required fields and malformed conflict details are rejected by unit checks.
 - Successful sequential idempotency replay preserves the original 201 response
   and Location without new dependency calls. Failed attempts leave no successful
-  key record. Atomic persistence is later work; high-concurrency guarantees,
+  key record. Atomic persistence is implemented in KAN-10; high-concurrency guarantees,
   in-flight coordination and key TTL are not promised.
 
 ## Products persistence and seed (KAN-6)
@@ -153,6 +153,39 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   They demonstrate totals, final-only rounding, input rejection, immutable history
   after dependency changes, and history after reopening the database with
   unreachable dependency URLs. They are not real-Products integration tests.
+
+## Orders conflicts, failures and sequential retries (KAN-10)
+
+- `idempotency_records` stores a unique key, SHA-256 request fingerprint and a
+  foreign key to the immutable order snapshot. Both INSERTs use one explicit
+  SQLite transaction; a failed key write rolls back the order. Existing Orders
+  files gain the table on open without rewriting their history. Pre-KAN-10 orders
+  have no retained keys and cannot retroactively support replay.
+- Fingerprints serialize validated request fields in a fixed object-property
+  order. JSON whitespace/property order do not change identity; item array order
+  does. This preserves the ordered response items without a generic JSON
+  canonicalization dependency. Price, version, quantity and offer ID all matter.
+- Validate requests (including duplicate offer IDs) before key lookup. A successful
+  key is checked before either HTTP dependency: identical payload replays the
+  stored order with 201 and its original Location; changed payload returns
+  `409 IDEMPOTENCY_KEY_REUSED`. Failed validation, conflicts and dependency errors
+  retain no successful record. A different key creates a fresh checkout.
+- Existing offer guards now have explicit Playwright coverage for stale price,
+  stale version, insufficient/zero stock and Products 404 mapped to
+  `409 OFFER_UNAVAILABLE`. Reject the whole cart and skip FX for these conflicts;
+  changed offers include expected/current values for reconfirmation.
+- Products/NBP failures (HTTP errors, unusable data, invalid JSON, disconnected
+  connections and timeouts) return 503 with neither order nor key persisted.
+  HTTP timeouts cover body consumption, not just receipt of headers. Tests use
+  controlled unfinished responses, not sleeps, for both timeout phases.
+- Playwright proves sequential replay, payload conflicts, retry after failure,
+  distinct keys and restart persistence using isolated SQLite and HTTP stubs.
+  Vitest persistence units inject a key-write failure to prove rollback and retry.
+  This is not cross-service integration or a high-concurrency demonstration.
+- No in-flight duplicate coordination, key TTL/cleanup or high-concurrency
+  guarantees are implemented. A database uniqueness constraint prevents retained
+  duplicate keys, but concurrent requests are not promised a replay/conflict
+  protocol. Stock validation remains neither reservation nor decrement.
 
 ## Incremental delivery
 

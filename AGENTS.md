@@ -29,10 +29,12 @@ has instead chosen to keep it gitignored; follow the owner's choice.
 
 ## Repo state
 
-KAN-5–9 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
+KAN-5–10 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
 endpoints with seeded SQLite, an NBP HTTP adapter/mock, and Orders checkout with
-private SQLite snapshots. Orders validates the idempotency header but does not
-yet retain keys or replay responses (KAN-10). App factories have no standalone
+private SQLite snapshots. Orders atomically persists successful idempotency keys
+and replays sequential retries without dependency calls; changed payloads return
+409. Failed attempts retain no successful-key record. High-concurrency guarantees
+are not demonstrated. App factories have no standalone
 listener/environment wiring yet.
 Use Node 24.11.1 / npm 11.6.2, `npm ci`, then `npm run check` (contract lint,
 TypeScript checks, unit and API tests). See README.md and docs/decisions.md.

@@ -70,31 +70,36 @@ export class NbpClient {
   async getLatestEurPlnRate(): Promise<NbpExchangeRate> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    let response: Response;
-
     try {
-      response = await this.request(new URL('/api/exchangerates/rates/a/eur/', this.baseUrl), {
-        headers: { accept: 'application/json' },
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (controller.signal.aborted) {
-        throw new NbpClientError('TIMEOUT', 'NBP request timed out', { cause: error });
+      let response: Response;
+      try {
+        response = await this.request(new URL('/api/exchangerates/rates/a/eur/', this.baseUrl), {
+          headers: { accept: 'application/json' },
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new NbpClientError('TIMEOUT', 'NBP request timed out', { cause: error });
+        }
+        throw new NbpClientError('UNAVAILABLE', 'NBP request failed', { cause: error });
       }
-      throw new NbpClientError('UNAVAILABLE', 'NBP request failed', { cause: error });
+
+      if (!response.ok) {
+        throw new NbpClientError('UNAVAILABLE', `NBP returned HTTP ${response.status}`);
+      }
+
+      try {
+        return parseRate(await response.json());
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new NbpClientError('TIMEOUT', 'NBP request timed out', { cause: error });
+        }
+        if (error instanceof NbpClientError) throw error;
+        throw new NbpClientError('INVALID_RESPONSE', 'NBP response was not valid JSON', { cause: error });
+      }
     } finally {
+      // The timeout covers consuming the response body as well as its headers.
       clearTimeout(timer);
-    }
-
-    if (!response.ok) {
-      throw new NbpClientError('UNAVAILABLE', `NBP returned HTTP ${response.status}`);
-    }
-
-    try {
-      return parseRate(await response.json());
-    } catch (error) {
-      if (error instanceof NbpClientError) throw error;
-      throw new NbpClientError('INVALID_RESPONSE', 'NBP response was not valid JSON', { cause: error });
     }
   }
 }

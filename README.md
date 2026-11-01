@@ -4,7 +4,7 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-9)
+## Current state (KAN-10)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
@@ -19,13 +19,13 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
   private SQLite snapshots, one Products batch request and one NBP rate per new
   checkout. Decimal calculations produce `213.00 EUR × 4.3000 = 915.90 PLN`.
   Historical reads never call dependencies, including after reopening the file.
-  The required `Idempotency-Key` is validated but **not retained/replayed yet**;
-  repeated submissions can create duplicate orders until KAN-10. Basic offer
-  guards exist; comprehensive conflicts/failures and idempotency are KAN-10 work.
+  Successful idempotency keys are stored atomically with orders. Sequential
+  retries replay the original response without dependency calls; changed payloads
+  under the same key return `409 IDEMPOTENCY_KEY_REUSED`. Conflicts and dependency
+  failures leave no order or successful-key record, allowing a corrected retry.
 
-The contracts include **planned behavior**, notably Orders idempotency. There is no
-frontend, Compose stack, Bruno collection, Schemathesis execution or CI workflow
-yet. These arrive in later tickets.
+There is no frontend, Compose stack, Bruno collection, Schemathesis execution or
+CI workflow yet. These arrive in later tickets.
 
 ## Products test data reset
 
@@ -57,7 +57,22 @@ reserves inventory or decrements stock. Compose and environment wiring are later
 
 An existing Orders file is reopened without reseeding or rewriting history. To
 reset it, stop all processes using it and delete **only that Orders database file**
-and its optional `-wal`/`-shm` files. This permanently deletes saved orders.
+and its optional `-wal`/`-shm` files. This permanently deletes saved orders and
+their idempotency records.
+
+### Sequential checkout retries
+
+- A new key creates an order and returns `201` plus `Location`.
+- After success, the same key and payload return the original `201` body and
+  `Location`, even after a restart or changes/failures in Products or NBP.
+- A changed payload with a successful key returns `409 IDEMPOTENCY_KEY_REUSED`.
+  JSON object property order/formatting is ignored; item array order matters.
+- Request validation happens first. Failed attempts retain no successful-key
+  record, so the key can be retried after fixing the cart or dependency.
+
+The stored immutable order is the replay body; its ID determines `Location`.
+This demonstrates **sequential** retries only: no in-flight duplicate coordination,
+high-concurrency guarantees, key expiry or cleanup are implemented.
 
 ## Local checks
 

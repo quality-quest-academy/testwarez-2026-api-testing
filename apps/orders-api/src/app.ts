@@ -2,6 +2,7 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { calculateOrder, type CreateOrderItem } from './checkout.js';
 import { openOrdersDatabase, type OrdersDatabase, type Order } from './database.js';
+import { fingerprintRequest } from './idempotency.js';
 import { NbpClient, NbpClientError, type NbpClientOptions } from './nbp-client.js';
 import { ProductsClient, ProductsClientError, type ProductsClientOptions } from './products-client.js';
 
@@ -46,7 +47,7 @@ export function buildApp({ database = openOrdersDatabase(':memory:'), products, 
       : order;
   });
 
-  app.post<{ Body: { items: CreateOrderItem[] } }>('/orders', {
+  app.post<{ Body: { items: CreateOrderItem[] }; Headers: { 'idempotency-key': string } }>('/orders', {
     schema: {
       headers: {
         type: 'object', required: ['idempotency-key'],
@@ -77,6 +78,15 @@ export function buildApp({ database = openOrdersDatabase(':memory:'), products, 
     if (new Set(offerIds).size !== offerIds.length) {
       return reply.status(400).send({ code: 'VALIDATION_ERROR', message: 'Offer IDs must be unique' });
     }
+    const key = request.headers['idempotency-key'];
+    const fingerprint = fingerprintRequest(items);
+    const previous = database.findSuccessfulRequest(key);
+    if (previous !== undefined) {
+      if (previous.fingerprint !== fingerprint) {
+        return reply.status(409).send({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Key was already used with a different payload' });
+      }
+      return reply.status(201).header('Location', `/orders/${previous.order.id}`).send(previous.order);
+    }
     const offers = await productsClient.resolveOffers(offerIds);
     const unavailable = offers.filter((offer, index) => offer.stock < items[index]!.quantity);
     if (unavailable.length > 0) {
@@ -101,7 +111,7 @@ export function buildApp({ database = openOrdersDatabase(':memory:'), products, 
       exchangeRate: rate, exchangeRateDate: effectiveDate,
       ...calculateOrder(items, offers, rate),
     };
-    database.insertOrder(order);
+    database.insertOrder(order, key, fingerprint);
     return reply.status(201).header('Location', `/orders/${order.id}`).send(order);
   });
 

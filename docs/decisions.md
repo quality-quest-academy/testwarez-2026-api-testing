@@ -266,6 +266,37 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   live-provider compatibility. Compose-based ephemeral CI execution remains
   KAN-15; browser E2E remains KAN-14.
 
+## Minimal frontend and browser tooling (KAN-14)
+
+- Vite 8.3.5 + Vanilla TypeScript, no framework, and `sessionStorage` for the
+  multi-item cart and uncertain checkout attempts. Keep offer price/version
+  expectations until explicit acceptance after conflict refresh. Acceptance
+  and submission are separate actions; never auto-retry a revised cart.
+- Use `decimal.js` for indicative display only. Orders receives only offer IDs,
+  quantities, expected price/version and an idempotency key; it alone decides
+  the final amount. Network/5xx failures retain the exact attempt/key and lock
+  edits until resolved, including after reload. No concurrency-hardening claims.
+- Local Vite dev/preview forwarding avoids business-API CORS changes. Browser FX
+  goes directly to the configurable NBP URL. Chromium read live NBP successfully
+  on 2026-11-01; no read-only indicative fallback was required. The mock permits
+  CORS on its read-only FX route. Live checks remain separate/non-blocking.
+- The frontend joins Compose with health/readiness dependencies; Vite preview
+  serves the lab, not a production deployment. FX is embedded at build time;
+  backend forwarding URLs are runtime process configuration. Vite dotenv loading
+  is disabled to avoid the root credentials file.
+- One Chromium test builds/serves private assets with real Products/Orders over
+  HTTP, separate temporary SQLite files and HTTP mock NBP. It covers reload,
+  explicit stale-offer review and confirmation without duplicating API-level
+  persistence/idempotency matrices. Pure cart transitions stay in Vitest. The
+  browser gate is included in `npm run check`, with zero retries and retained
+  failure traces/screenshots. Compose CI orchestration remains KAN-15.
+- Owner-approved extension: pinned project-local Playwright MCP 0.0.84, installed
+  Edge with an isolated profile, loopback origin guardrails, WebMCP disabled and
+  ignored artifacts. MCP was selected for the later interactive exploratory
+  workflow, not as a replacement for Playwright Test. The exploratory session
+  remains a separate initiative. See [frontend.md](frontend.md) for setup,
+  verified CORS behavior, safety boundaries and retry limitations.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

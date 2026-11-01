@@ -22,6 +22,9 @@ export function buildNbpMock({
   app.get('/health', () => ({ status: 'ok' }));
 
   app.get('/api/exchangerates/rates/a/eur/', async (_request, reply) => {
+    // Read-only public FX response: permit the browser's indicative direct
+    // request, rather than hiding cross-origin behavior behind UI routing.
+    reply.header('Access-Control-Allow-Origin', '*');
     if (mode === 'unavailable') {
       return reply.status(503).send({ error: 'NBP mock is unavailable' });
     }

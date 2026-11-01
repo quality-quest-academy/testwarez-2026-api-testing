@@ -2,6 +2,17 @@
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
+      "playwright": {
+        "type": "local",
+        "command": [
+          "npx", "--yes", "@playwright/mcp@0.0.84",
+          "--browser", "msedge", "--isolated", "--no-webmcp",
+          "--allowed-origins", "http://localhost:*;http://127.0.0.1:*",
+          "--output-dir", "test-results/mcp"
+        ],
+        "cwd": ".",
+        "timeout": { "startup": 60000 }
+      },
       "jira": {
         "type": "local",
         "command": ["uvx", "mcp-atlassian@0.23.1", "--env-file", ".env"],

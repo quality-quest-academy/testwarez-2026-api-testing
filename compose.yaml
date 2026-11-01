@@ -56,6 +56,29 @@ services:
       retries: 10
       start_period: 5s
 
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    environment:
+      FRONTEND_PRODUCTS_URL: http://products-api:3001
+      FRONTEND_ORDERS_URL: http://orders-api:3002
+    ports:
+      - '5173:5173'
+    depends_on:
+      products-api:
+        condition: service_healthy
+      orders-api:
+        condition: service_healthy
+      nbp-mock:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', "node -e \"fetch('http://localhost:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
 volumes:
   products-data:
   orders-data:

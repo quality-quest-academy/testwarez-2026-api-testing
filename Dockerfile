@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/products-api/package.json apps/products-api/package.json
 COPY apps/orders-api/package.json apps/orders-api/package.json
+COPY apps/frontend/package.json apps/frontend/package.json
 COPY mocks/nbp/package.json mocks/nbp/package.json
 RUN npm ci
 

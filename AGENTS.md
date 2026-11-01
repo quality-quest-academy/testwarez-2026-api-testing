@@ -29,7 +29,7 @@ has instead chosen to keep it gitignored; follow the owner's choice.
 
 ## Repo state
 
-KAN-5–13 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
+KAN-5–14 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
 endpoints with seeded SQLite, an NBP HTTP adapter/mock, and Orders checkout with
 private SQLite snapshots. Orders atomically persists successful idempotency keys
 and replays sequential retries without dependency calls; changed payloads return
@@ -37,28 +37,38 @@ and replays sequential retries without dependency calls; changed payloads return
 are not demonstrated. Compose provides standalone listeners, separate persistent
 volumes and mock-NBP wiring. Contract tests use fresh in-memory stores and
 loopback listeners, not developer volumes or live NBP.
-Use Node 24.11.1 / npm 11.6.2, `npm ci`, then `npm run check` (contract lint,
-TypeScript checks, unit/API tests and targeted contract examples). Also run
+Use Node 24.11.1 / npm 11.6.2, `npm ci`, `npx playwright install chromium`, then
+`npm run check` (contract lint, TypeScript/UI build, unit/API/integration tests,
+targeted contract examples and one browser E2E). Also run
 `npm run test:contract` for the complete current gate; it requires `uvx` and manages
 Python 3.12 / Schemathesis 4.32.7. See README.md, docs/decisions.md and
 docs/contract-testing.md.
 
 Vitest is **unit tests only** (`tests/unit/`). Use **Playwright for API tests**
 (`tests/api/`), contract fixture/CLI orchestration (`tests/contract/`), integration
-tests (`tests/integration/`), and later browser E2E. Do not put API tests in Vitest.
+tests (`tests/integration/`), and browser E2E (`tests/e2e/`). Do not put API tests in Vitest.
 `npm run test:integration` runs real Products/Orders HTTP listeners with separate
 fresh temporary SQLite files and the NBP mock per test, proving multi-item
 checkout and stale price/version rejection followed by explicit reconfirmation.
 It is included in `npm test` / `npm run check`. Local integration tests do not
-exercise Compose; Compose-based CI orchestration, UI and browser E2E are later
-tickets. Do not claim those already exist.
+exercise Compose; Compose-based CI orchestration remains KAN-15. The frontend
+is Vite + Vanilla TS with sessionStorage cart state, explicit conflict review,
+direct indicative FX and authoritative Orders confirmation. `npm run test:e2e`
+builds privately and serves real UI assets against fresh real APIs/private SQLite
+files and the HTTP NBP mock; no developer volumes or live NBP are used.
 
-## Jira MCP server
+## MCP servers
 
-`opencode.jsonc` defines the only tooling: a Jira MCP server via `mcp-atlassian`
+`opencode.jsonc` defines a Jira MCP server via `mcp-atlassian`
 (pinned to 0.23.1, launched with `uvx`). It reads credentials from `.env` in the
 repo root. Prerequisites: `uvx` installed and valid `JIRA_URL` / `JIRA_USERNAME`
 / `JIRA_API_TOKEN` in `.env`. Startup can take up to ~60s.
+
+It also defines pinned Playwright MCP 0.0.84 for later local exploratory work,
+using installed Edge, an isolated in-memory profile and loopback-only origin
+guardrails. See `docs/frontend.md`. MCP is not the regression runner. Do not
+access credentials, personal browser profiles, external sites or developer data
+through browser tools. A broader exploratory session is a separate initiative.
 
 ## Secrets
 

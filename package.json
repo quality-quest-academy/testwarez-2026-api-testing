@@ -18,10 +18,13 @@
     "test:unit": "vitest run",
     "test:api": "playwright test",
     "test:integration": "playwright test --config playwright.integration.config.ts",
+    "dev:frontend": "npm run dev --workspace @testwarez/frontend",
+    "build:frontend": "npm run build --workspace @testwarez/frontend",
+    "test:e2e": "playwright test --config playwright.e2e.config.ts",
     "test:contract": "playwright test --config playwright.contract.config.ts",
     "test:contract:examples": "npm run test:contract -- responses.spec.ts",
     "test": "npm run test:unit && npm run test:api && npm run test:integration",
-    "check": "npm run contracts:lint && npm run typecheck && npm test && npm run test:contract:examples"
+    "check": "npm run contracts:lint && npm run typecheck && npm run build:frontend && npm test && npm run test:contract:examples && npm run test:e2e"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "13.1.0",

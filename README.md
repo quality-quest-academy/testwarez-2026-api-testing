@@ -4,7 +4,7 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-13)
+## Current state (KAN-14)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
@@ -27,25 +27,37 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
 - Playwright integration tests run both real APIs over HTTP with separate fresh
   SQLite files and the NBP mock. They verify multi-item checkout, stale price and
   version rejection, no partial writes, and explicit reconfirmation before retry.
+- Vite + Vanilla TypeScript frontend shows supplier offers, a session-scoped
+  multi-item cart and indicative PLN conversion. Conflicts refresh offers but
+  require explicit acceptance and a separate checkout submission. Confirmation
+  displays the authoritative Orders snapshot, not a browser-computed final price.
+- One Chromium browser journey covers cart persistence, conflict review and
+  checkout against real APIs, private SQLite files and the HTTP NBP mock.
+- Project-local Playwright MCP is configured for later agent-driven exploration;
+  exploration is separate from the automated regression gate.
 
-`compose.yaml` runs Products, Orders and the deterministic NBP mock with separate
-named SQLite volumes and health checks. There is no frontend, Bruno collection
-or CI workflow yet. These arrive in later tickets.
+`compose.yaml` runs Products, Orders, the deterministic NBP mock and frontend,
+with separate named SQLite volumes and health checks. Bruno and CI remain later
+tickets.
 
-## Run the backend with Docker Compose
+## Run the demo with Docker Compose
 
-With Docker Desktop running, start the complete deterministic backend from a clean
+With Docker Desktop running, start the complete deterministic demo from a clean
 checkout with:
 
 ```sh
-docker compose up --build
+docker compose --env-file .env.example up --build
 ```
 
-The services are available at `http://localhost:3001` (Products),
+Open **http://localhost:5173** for the UI. The services are available at `http://localhost:3001` (Products),
 `http://localhost:3002` (Orders) and `http://localhost:3003` (NBP mock). Their
 readiness endpoints are `/health`. Orders reaches Products and the mock only via
 the Compose network; each API mounts its own named volume and only opens its own
 SQLite file.
+
+The browser fetches indicative FX directly from the local NBP mock. The UI host
+forwards `/api/products/*` and `/api/orders/*` to the respective APIs; it does
+not calculate final prices. No Jira credentials are needed by Compose.
 
 Stopping the stack with `docker compose down` preserves the seeded Products data
 and any created Orders. To intentionally delete both databases and recreate the
@@ -109,10 +121,11 @@ high-concurrency guarantees, key expiry or cleanup are implemented.
 ## Local checks
 
 Use Node.js **24.11.1** (see `.node-version`) and npm **11.6.2**. No credentials,
-Docker, Python or browser binaries are needed for these checks.
+Docker or Python are needed for these checks. Chromium is needed for browser E2E.
 
 ```sh
 npm ci
+npx playwright install chromium
 npm run check
 ```
 
@@ -121,13 +134,16 @@ Individual commands:
 | Command | What it checks |
 | --- | --- |
 | `npm run contracts:lint` | Both OpenAPI specs with Redocly recommended-strict rules |
-| `npm run typecheck` | Root test/tooling code and both app workspaces |
+| `npm run typecheck` | Root test/tooling code and all app workspaces |
+| `npm run build:frontend` | Type-check and build the Vite UI |
 | `npm run test:unit` | Vitest contract examples, persistence and exact-calculation units |
 | `npm run test:api` | Playwright isolated Products, Orders and NBP HTTP tests |
 | `npm run test:integration` | Real Products + Orders, separate fresh SQLite files, HTTP NBP mock |
 | `npm run test:contract:examples` | Valid HTTP response bodies plus deliberately broken copies; no Python needed |
 | `npm run test:contract` | Schemathesis-generated checks for both APIs plus targeted examples; requires `uvx` |
 | `npm test` | Unit tests, then isolated API and backend integration tests |
+| `npm run test:e2e` | One Chromium UI journey; builds privately, starts its own APIs/mock and fresh databases |
+| `npm run dev:frontend` | Local UI development server (start backend services separately) |
 
 For the complete current gate, run `npm run check` **and** `npm run test:contract`.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for `uvx`;
@@ -176,7 +192,7 @@ were added to hide the runtime symptom.
 ## Target architecture and boundaries
 
 ```text
-Browser (Vite + Vanilla TS, later)
+Browser (Vite + Vanilla TS)
   ├─ catalog/offers ──> Products API ──> private products.db (SQLite)
   ├─ checkout ────────> Orders API ────> private orders.db (SQLite)
   └─ indicative FX ──> NBP (read-only fallback if browser CORS requires it)
@@ -196,17 +212,25 @@ explicit reconfirmation. Money is represented as decimal strings.
 | --- | --- |
 | `apps/products-api/` | Products Fastify factory, catalog persistence and endpoints |
 | `apps/orders-api/` | Orders Fastify factory, HTTP clients, calculations and snapshots |
+| `apps/frontend/` | Vite + Vanilla TS catalog/cart, explicit review and Orders confirmation |
 | `mocks/nbp/` | Configurable NBP table-A EUR/PLN HTTP test double and fixture |
 | `contracts/` | Independently readable Products and Orders OpenAPI contracts |
 | `tests/unit/` | Vitest only: pure unit/schema-tooling tests |
 | `tests/api/` | Playwright: isolated API tests with temporary stores and HTTP stubs |
 | `tests/contract/` | Schemathesis CLI orchestration/configuration and targeted response examples |
 | `tests/integration/` | Playwright real Products/Orders checkout and stale-cart scenarios |
+| `tests/e2e/` | One Chromium browser journey with real services and HTTP mock NBP |
 | `docs/decisions.md` | Tool choices, contract details and deferred work |
 
-Later boundaries: `apps/frontend/` for Vite + Vanilla TS;
-`tests/e2e/` for **one** Playwright browser flow; `bruno/` for exploration.
-These are planned folders, not delivered functionality.
+`bruno/` for exploratory requests remains planned (KAN-16).
+
+## Frontend and exploratory browser tooling
+
+See [frontend and browser tooling](docs/frontend.md) for local development,
+indicative FX configuration and verified browser/CORS behavior, conflict review,
+checkout retry limitations and **Playwright MCP** setup. The MCP uses an isolated
+Edge profile; it does not replace `npm run test:e2e`. An exploratory session is a
+separate later initiative, not delivered test coverage.
 
 ## Testing choices
 

@@ -4,10 +4,12 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-5)
+## Current state (KAN-6)
 
-- Two TypeScript/Fastify app factories; **no endpoints, listeners or databases**
-  are implemented yet. Tests start temporary listeners themselves.
+- The Products service owns a SQLite schema plus deterministic catalog, supplier
+  and offer seed data. It has no routes or listener yet; tests open isolated
+  database files directly. The Orders app remains a route- and persistence-free
+  factory.
 - Two authored OpenAPI **3.0.3** contracts, linting and schema-example unit tests.
 - Playwright API bootstrap smoke tests, TypeScript checks and npm workspaces.
 
@@ -15,10 +17,27 @@ The contracts describe **planned behavior**, not working APIs. There is no
 frontend, NBP mock, Compose stack, Bruno collection, Schemathesis execution or CI
 workflow yet. These arrive in later tickets.
 
+## Products test data reset
+
+KAN-6 exposes `openProductsDatabase(filename)` for the next endpoint slice. An
+empty SQLite file is initialized and seeded automatically; reopening an existing
+file never duplicates the seed. To reset a local Products database, stop every
+process using it, delete that database file and its optional `-wal`/`-shm` files,
+then open it again. For example, if KAN-7 uses `products.db` in the repository
+root on PowerShell:
+
+```powershell
+Remove-Item products.db, products.db-wal, products.db-shm -Force -ErrorAction SilentlyContinue
+```
+
+The service/Compose database location is deliberately deferred to the tickets
+that add that configuration. Do not delete a data volume unless a full reset is
+intended.
+
 ## Local checks
 
 Use Node.js **24.11.1** (see `.node-version`) and npm **11.6.2**. No credentials,
-Docker, Python or browser binaries are needed for KAN-5 checks.
+Docker, Python or browser binaries are needed for KAN-6 checks.
 
 ```sh
 npm ci

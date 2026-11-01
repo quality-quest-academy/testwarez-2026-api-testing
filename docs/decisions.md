@@ -82,6 +82,20 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   key record. Atomic persistence is later work; high-concurrency guarantees,
   in-flight coordination and key TTL are not promised.
 
+## Products persistence and seed (KAN-6)
+
+- `apps/products-api/src/database.ts` owns the Products SQLite schema and its
+  deterministic seed. It uses `products`, `suppliers`, and `offers` tables with
+  foreign keys and database checks for EUR, nonnegative stock and positive
+  versions.
+- `openProductsDatabase(filename)` initializes an empty file and runs the
+  idempotent seed on every open. Stable seed IDs prevent duplicates after a
+  restart. `prod-001` has offers from Alpha and Beta, including Beta's
+  unavailable (`stock: 0`) offer.
+- This ticket deliberately adds no routes, listener, default data-file location
+  or environment configuration. KAN-7 will consume this service-owned data
+  layer; KAN-11 will choose the container data path and volume.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

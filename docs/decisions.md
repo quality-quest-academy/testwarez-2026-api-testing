@@ -231,7 +231,7 @@ Real-NBP compatibility is a separate optional, non-blocking check.
 - `npm run check` includes the Python-free targeted examples. The complete gate
   additionally requires `npm run test:contract` (initial uv/Python/tool downloads
   need internet). CLI logs, JUnit and HAR artifacts make failures inspectable.
-  GitHub Actions wiring remains KAN-15. See
+  Required GitHub Actions wiring is documented under KAN-15 below. See
   [contract-testing.md](contract-testing.md) for limits and the distinction between
   schema conformance, business assertions and consumer-driven contracts.
 
@@ -263,8 +263,8 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   no partial writes; application code remains independent of the other store.
 - This suite demonstrates real HTTP service integration and business behavior,
   not container startup, a browser journey, high-concurrency idempotency or
-  live-provider compatibility. Compose-based ephemeral CI execution remains
-  KAN-15; browser E2E remains KAN-14.
+  live-provider compatibility. Compose-based ephemeral CI execution is a separate
+  KAN-15 gate; browser E2E is documented under KAN-14 below.
 
 ## Minimal frontend and browser tooling (KAN-14)
 
@@ -289,7 +289,8 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   explicit stale-offer review and confirmation without duplicating API-level
   persistence/idempotency matrices. Pure cart transitions stay in Vitest. The
   browser gate is included in `npm run check`, with zero retries and retained
-  failure traces/screenshots. Compose CI orchestration remains KAN-15.
+  failure traces/screenshots. Separate Compose CI orchestration is documented
+  under KAN-15 below.
 - Owner-approved extension: pinned project-local Playwright MCP 0.0.84, installed
   Edge with an isolated profile, loopback origin guardrails, WebMCP disabled and
   ignored artifacts. MCP was selected for the later interactive exploratory

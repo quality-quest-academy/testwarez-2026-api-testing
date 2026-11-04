@@ -29,7 +29,7 @@ has instead chosen to keep it gitignored; follow the owner's choice.
 
 ## Repo state
 
-KAN-5–14 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
+KAN-5–15 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
 endpoints with seeded SQLite, an NBP HTTP adapter/mock, and Orders checkout with
 private SQLite snapshots. Orders atomically persists successful idempotency keys
 and replays sequential retries without dependency calls; changed payloads return
@@ -51,11 +51,22 @@ tests (`tests/integration/`), and browser E2E (`tests/e2e/`). Do not put API tes
 fresh temporary SQLite files and the NBP mock per test, proving multi-item
 checkout and stale price/version rejection followed by explicit reconfirmation.
 It is included in `npm test` / `npm run check`. Local integration tests do not
-exercise Compose; Compose-based CI orchestration remains KAN-15. The frontend
+exercise Compose. GitHub Actions separately runs explicit container-targeted
+tests with fresh projects/volumes for each scenario, serial execution and verified
+teardown. The frontend
 is Vite + Vanilla TS with sessionStorage cart state, explicit conflict review,
 direct indicative FX and authoritative Orders confirmation. `npm run test:e2e`
 builds privately and serves real UI assets against fresh real APIs/private SQLite
 files and the HTTP NBP mock; no developer volumes or live NBP are used.
+
+CI has four required groups: Static, Isolated, Contracts and Compose system
+(including the single Chromium journey). Main requires an up-to-date PR, all
+four checks from GitHub Actions, and has no routine administrator bypass. See
+docs/test-strategy.md for commands, hosted evidence, scope and teardown limits;
+.github/main-ruleset.json records the desired repository rule configuration.
+Never weaken checks or use personal credentials in Actions. Local Compose system
+commands require an explicit unique CI_IMAGE_TAG and free loopback ports; they
+must not adopt/reset developer projects or fall back to local app fixtures.
 
 ## MCP servers
 

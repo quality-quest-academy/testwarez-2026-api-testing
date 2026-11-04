@@ -139,7 +139,15 @@ if (process.argv.includes('--cleanup')) {
         if (!report.includes('Deliberate lifecycle probe')) throw new Error('Probe failed for an unintended reason');
       } else {
         const logs = await readFile(resolve(directory, 'state.log'), 'utf8');
-        if (!logs.includes('42')) throw new Error('Startup probe did not record the intended exit status');
+        const states = logs.trim().split(/\r?\n/).filter(Boolean).flatMap((line) => JSON.parse(line));
+        if (!states.some((state) => state.Service === 'orders-api' && state.State === 'exited' && state.ExitCode === 42)) {
+          throw new Error('Startup probe did not record Orders exiting 42');
+        }
+        for (const service of ['products-api', 'nbp-mock']) {
+          if (!states.some((state) => state.Service === service && state.State === 'running' && state.Health === 'healthy')) {
+            throw new Error(`Startup probe did not retain healthy ${service} evidence`);
+          }
+        }
       }
       console.log(`Verified expected ${scenario.expected} failure, retained diagnostics, and removed ${project}`);
     } else if (failure) throw failure;

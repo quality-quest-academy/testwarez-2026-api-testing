@@ -168,5 +168,32 @@ empty bypass list and `current_user_can_bypass: never` for the authenticated
 administrator. There were no pre-existing repository/parent rulesets to replace.
 PR #1 merged normally under these rules; no admin override was used.
 
-Main-push verification and the deliberately failing verification PR/recovery are
-still being recorded; KAN-15 is not complete until those checks are demonstrated.
+The first clean-checkout [main-push run](https://github.com/quality-quest-academy/testwarez-2026-api-testing/actions/runs/41875593189)
+also passed all four groups: Static 19 s, Isolated 24 s, Contracts 25 s and Compose
+system 2 min 54 s (job execution time, excluding queue time).
+
+[Verification PR #2](https://github.com/quality-quest-academy/testwarez-2026-api-testing/pull/2)
+deliberately expected `915.91` instead of the correct `915.90` in the Compose
+checkout assertion, without changing production behavior. Its
+[failing run](https://github.com/quality-quest-academy/testwarez-2026-api-testing/actions/runs/41875895300)
+passed Static, Isolated and Contracts but **failed Compose system**. Downloaded
+JUnit/logs confirm exactly that assertion mismatch, not an infrastructure error;
+the project retained diagnostics, removed its resources and passed fallback
+cleanup. GitHub reported the PR `BLOCKED`. A real administrator merge request
+(`PUT /pulls/2/merge`, exact failing head SHA, squash, no bypass) returned:
+
+```text
+HTTP 405: Repository rule violations found
+Required status check "Compose system" is failing.
+```
+
+The PR remained open; [the rejection evidence is also recorded on the PR](https://github.com/quality-quest-academy/testwarez-2026-api-testing/pull/2#issuecomment-6637250723).
+The recovery restores the correct expectation. It also makes the successful
+browser's HTTP evidence an explicit artifact file (an in-memory attachment alone
+was not persisted by the JUnit reporter), and tightens startup-probe validation
+to check the exact Orders service exit 42 plus healthy Products/mock states.
+No rule relaxation, override, test retry or production change is involved.
+
+The recovery outcome is recorded in PR #2's required-check history and completion
+comment. Completion requires the same four checks to pass again and the recovered
+PR to merge normally; merely restoring the assertion is not completion evidence.

@@ -65,6 +65,43 @@ test('rejects request bodies outside the documented offer constraints', async ({
   } finally { await api.close(); }
 });
 
+for (const [description, body] of [
+  ['null stock', { stock: null }],
+  ['boolean true stock', { stock: true }],
+  ['boolean false stock', { stock: false }],
+  ['string stock matching the current value', { stock: '8' }],
+  ['string stock changing the current value', { stock: '7' }],
+  ['numeric decimal price', { price: 89.25 }],
+  ['null price', { price: null }],
+  ['boolean price', { price: true }],
+  ['valid price with invalid stock', { price: '90.00', stock: null }],
+  ['invalid price with valid stock', { price: 89.25, stock: 7 }],
+  ['unknown property with valid stock', { stock: 7, unexpected: true }],
+] as const) {
+  test(`rejects ${description} without changing the persisted offer or version`, async ({ request }) => {
+    const api = await startProductsApi();
+    try {
+      const before = await request.get(`${api.address}/products/prod-001`);
+      expect(before.status()).toBe(200);
+      const product = await before.json();
+
+      const response = await request.patch(`${api.address}/offers/offer-101`, { data: body });
+      const error = await response.json();
+
+      const after = await request.get(`${api.address}/products/prod-001`);
+      expect(after.status()).toBe(200);
+      expect.soft(await after.json()).toEqual(product);
+
+      const catalog = await request.get(`${api.address}/products`);
+      expect(catalog.status()).toBe(200);
+      expect.soft(await catalog.json()).toEqual(expect.arrayContaining([product]));
+
+      expect(response.status()).toBe(400);
+      expect(error).toEqual({ code: 'VALIDATION_ERROR', message: 'Invalid request' });
+    } finally { await api.close(); }
+  });
+}
+
 test('increments an offer version only for a real price or stock change', async ({ request }) => {
   const api = await startProductsApi();
   try {

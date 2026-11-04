@@ -7,7 +7,7 @@ const identifierSchema = { type: 'string', minLength: 1 } as const;
 const moneySchema = { type: 'string', pattern: '^(0|[1-9][0-9]*)\\.[0-9]{2}$' } as const;
 
 export function buildApp({ database = openProductsDatabase(':memory:'), ...options }: ProductsAppOptions = {}) {
-  const app = Fastify(options);
+  const app = Fastify({ ...options, ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
 
   app.setErrorHandler((error, _request, reply) => {
     if (typeof error === 'object' && error !== null &&

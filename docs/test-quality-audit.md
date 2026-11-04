@@ -5,8 +5,9 @@
 Reviewed the committed baseline `4e0d41c`: five unit files, four isolated API
 files, the targeted/generated contract suites, backend integration, the single
 browser journey, shared scenarios and their fixtures. Compose HTTP/browser
-assertions were reviewed too; pipeline configuration and orchestration changes
-are deferred to KAN-22. The purpose is a readable educational example, not a
+assertions were reviewed too; pipeline configuration and orchestration are outside
+this change. The branch was subsequently rebased onto merged KAN-22 (`6fa9461`).
+The purpose is a readable educational example, not a
 general test framework or exhaustive production-hardening exercise.
 
 | Area | Assessment and concrete examples |
@@ -34,6 +35,11 @@ general test framework or exhaustive production-hardening exercise.
   asynchronous release errors, partial acquisition failure, original-error
   preservation, cleanup-only failure and successful return. These are pure unit
   examples using callbacks, not HTTP tests or proof of real resource release.
+- `tests/api/resource-lifecycle.spec.ts` complements those units with real
+  file-backed SQLite and loopback listeners. Controlled later-setup and HTTP
+  assertion failures must preserve the original error, close the connection and
+  listener, and delete the private directory. Expected failures are asserted as
+  outcomes; an unexpected success or a different failure fails the test.
 - `tests/helpers/backend.ts` explicitly starts real Products/Orders with separate
   private SQLite files and mock NBP for local integration/browser fixtures.
   Compose fixtures do not use it and cannot fall back to local apps.
@@ -60,33 +66,44 @@ general test framework or exhaustive production-hardening exercise.
 
 ## Remaining recommendations and limits
 
-1. **Required before completion:** execute the changed suites and verify real
-   partial-startup/assertion-failure cleanup (listeners, SQLite and private
-   directories), not just callback-level lifecycle units. User requested static
-   checks only while another session is running; no services, browser, tests,
-   Schemathesis or Compose were started for this implementation.
-2. **Runtime diagnosis:** reassess the documented Windows/Node 24.11.1
-   `UV_HANDLE_CLOSING` shutdown assertion with focused one-worker and parallel
-   runs. Passing business assertions and parent exit 0 do not establish clean
-   worker shutdown. Upstream Node issue 56645 is a related symptom report, not a
-   proven root cause or proof that this pinned runtime is fixed. Do not hide the
-   symptom using sleeps, retries, suppressed stderr or an unapproved pin change.
-3. **Bounded follow-up:** Schemathesis interruption/descendant-process ownership
+1. **Runtime diagnosis:** the documented Windows/Node 24.11.1
+   `UV_HANDLE_CLOSING` shutdown assertion reproduced after passing parallel
+   integration assertions; the command returned 0. A separate one-worker run was
+   clean. This reproduces the pre-existing symptom, not a new business failure
+   or proof of clean parallel shutdown. Upstream Node issue 56645 is related
+   evidence, not a proven root cause. No sleeps, retries, suppressed stderr,
+   default worker changes or runtime-pin changes were used to hide it.
+2. **Bounded follow-up:** Schemathesis interruption/descendant-process ownership
    is not solved by killing only its `uvx` launcher. No process-supervision
    framework or CI cancellation changes are introduced here.
-4. **Optional teaching improvements:** use differing controlled indicative/final
+3. **Optional teaching improvements:** use differing controlled indicative/final
    FX rates in the existing browser journey to distinguish authority, and add a
    few semantic adapter-response cases. Current equal rates and malformed-response
    examples are representative, not comprehensive demonstrations of those rules.
 
 ## Validation evidence
 
-Only static validation is authorized for this iteration:
+Initial implementation was static-only at the owner's request. After KAN-22
+merged, runtime validation was authorized and completed locally on Windows,
+Node 24.11.1 / npm 11.6.2, with a private `npm ci` installation in this worktree:
 
-- `npm run typecheck` — passed for root tests/tooling and all app/mock workspaces.
-- `npm run contracts:lint` — both authored contracts passed.
-- `git diff --check` — passed; no helper declarations or lifecycle `try` blocks
-  remain in `*.spec.ts` / `*.test.ts` files by static inspection.
-- Runtime validation of all added/changed tests remains pending. No claim is made
-  that the new fixture lifecycle, POM journey, SQLite regressions or Compose
-  diagnostic path has passed execution. KAN-18 is not marked complete.
+| Command | Observed result |
+| --- | --- |
+| `npm run check` | Passed: contract lint, root/workspace TypeScript, frontend build, 53 units, 77 isolated API tests (including both real cleanup probes), three integration scenarios, two targeted contract examples and one Chromium journey. Parallel integration printed the known shutdown assertion described above. |
+| `npm run test:contract` | Passed four Playwright orchestration/example tests; all five Products and three Orders operations selected; 67 Products and 24 Orders generated cases passed. Generation counts are separate from orchestration counts. |
+| `npm run test:integration -- --workers=1 --output test-results/kan18-integration-single` | All three scenarios passed without the shutdown assertion in this diagnostic run. Not an automatic retry or a change to the default gate. |
+| `npm run test:compose:build` | Built explicitly tagged images using `CI_IMAGE_TAG=local-kan18-20261104-2309`. |
+| `npm run test:compose:failures` | Both probes verified their specific expected failure and successful resource removal; these are not passing business scenarios. |
+| `npm run test:compose:system` | All three backend scenarios and the shared POM browser journey passed against fresh containers/volumes. |
+| `npm run test:compose:cleanup` | All six manifest-owned projects verified removed again; original and fallback cleanup records each contain zero errors. |
+| `git diff --check` | Passed. Refactored scenario files have no helper declarations or lifecycle `try` blocks; KAN-22's separate summary-tooling units are unchanged. |
+
+Compose evidence is scoped under `test-results/compose/`. Browser HTTP evidence
+records direct mock FX 200, rejected checkout 409 and explicitly resubmitted
+checkout 201. Developer data, volumes, credentials and live NBP were not used.
+No new business/fixture/POM regression was observed. Representative failure
+cleanup is now exercised with real resources, but forced process termination
+and all possible partial-startup positions are not exhaustively covered.
+
+PR/hosted required checks and owner approval remain separate delivery gates;
+local passing tests alone do not mark KAN-18 complete.

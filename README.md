@@ -254,7 +254,7 @@ contracts or prove compatibility with the real NBP provider.
 See [contract checks](docs/contract-testing.md) and [decisions](docs/decisions.md).
 See [the KAN-18 test-quality audit](docs/test-quality-audit.md) for fixture
 ownership, the small browser page object, implemented improvements and pending
-runtime validation.
+follow-ups, with local validation evidence.
 
 ## Non-goals and safety
 

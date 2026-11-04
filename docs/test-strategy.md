@@ -113,8 +113,60 @@ after successful hosted runs. Required checks must be sourced from GitHub Action
 strict/up-to-date, apply to administrators without routine bypass, require PRs
 but no approving review, and prevent branch deletion and force pushes.
 
+Desired repository settings are versioned in `.github/main-ruleset.json`. They
+are applied with the owner's local authenticated GitHub CLI, **not** by a
+privileged Actions job. Read existing rules first and preserve unrelated rules;
+the JSON is not permission to replace other protections or add bypass actors.
+
+## Local verification
+
+On Node 24.11.1/npm 11.6.2, `npm ci`, contract lint, TypeScript and frontend build
+passed. `npm run check` returned 0: 25 units, 54 isolated API tests, three local
+integration tests, two targeted contract examples and one Chromium journey.
+`npm run test:contract -- --workers=1` passed four orchestration/example tests
+(67 generated Products and 24 Orders cases). Separate local Compose build,
+lifecycle probes, all four scenarios and fallback teardown passed; all six
+projects recorded successful resource removal.
+
+The parallel local `check` run printed the already documented Windows Node
+shutdown assertion in the integration stage after passing assertions (exit 0).
+A separate one-worker integration run was clean. No retry or error suppression
+was added; Linux-hosted results are evaluated independently.
+
 ## Hosted verification evidence
 
-Pending the first hosted run; implementation is not complete until this section
-records successful PR/main runs, enforced rules, deliberately blocked failure and
-passing recovery, cleanup evidence and measured timings.
+The first clean-checkout [PR #1 run](https://github.com/quality-quest-academy/testwarez-2026-api-testing/actions/runs/41864424725)
+passed all four groups. Downloaded artifacts confirm 25 units, 54 isolated API,
+three local integration and four contract orchestration/example tests (all eight
+API operations selected; 67 Products and 24 Orders generated cases passed).
+All four Compose business scenarios passed. The assertion and partial-startup
+probes failed in their intended phases; each of the six project cleanup records
+and all six fallback records reported removal with no errors. The assertion
+probe retained its failed JUnit, screenshot and trace; startup diagnostics
+recorded Orders exiting 42 while Products and mock were healthy.
+
+Observed first-run job durations (start to completion, excluding queue time):
+
+| Static | Isolated | Contracts | Compose system |
+| --- | --- | --- | --- |
+| 20 s | 22 s | 25 s | 3 min 16 s |
+
+Compose's breakdown was 41 s installing Chromium/system dependencies, 23 s
+building images, 31 s for failure probes, 82 s for the four system scenarios and
+2 s fallback cleanup; the rest was setup/reporting. No additional Docker cache
+is justified by a 23-second image build. Timings vary with network/runner load.
+A GitHub Actions incident delayed publication of check conclusions even after
+artifacts existed; completion was confirmed from the check API after recovery,
+not inferred from artifacts alone.
+
+After these check names appeared successfully, repository ruleset
+[26549637](https://github.com/quality-quest-academy/testwarez-2026-api-testing/rules/26549637)
+was created **active** for `refs/heads/main`. API readback confirmed all four
+checks bound to the GitHub Actions app (integration ID 15368), strict/up-to-date
+policy, PR required, zero required approving reviews, deletion/force-push blocks,
+empty bypass list and `current_user_can_bypass: never` for the authenticated
+administrator. There were no pre-existing repository/parent rulesets to replace.
+PR #1 merged normally under these rules; no admin override was used.
+
+Main-push verification and the deliberately failing verification PR/recovery are
+still being recorded; KAN-15 is not complete until those checks are demonstrated.

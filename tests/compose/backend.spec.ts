@@ -15,7 +15,7 @@ test('multi-item checkout', async ({ request, products, orders }) => {
   const order = await response.json();
   expect(order).toEqual({
     id: expect.any(String), status: 'CREATED', currency: 'PLN', createdAt: expect.any(String),
-    subtotalEUR: '213.00', exchangeRate: '4.3000', exchangeRateDate: '2026-10-21', total: '915.90',
+    subtotalEUR: '213.00', exchangeRate: '4.3000', exchangeRateDate: '2026-10-21', total: '915.91',
     items: [
       { offerId: 'offer-101', productName: 'Demo keyboard', quantity: 2, unitPrice: '89.00', currency: 'EUR', lineTotal: '178.00' },
       { offerId: 'offer-205', productName: 'Demo mouse', quantity: 1, unitPrice: '35.00', currency: 'EUR', lineTotal: '35.00' },

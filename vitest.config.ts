@@ -4,5 +4,6 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts'],
     retry: 0,
+    allowOnly: !process.env.CI,
   },
 });

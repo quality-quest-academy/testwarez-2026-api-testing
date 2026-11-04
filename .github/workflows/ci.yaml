@@ -27,11 +27,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run contracts:lint
+        id: lint
       - run: npm run typecheck
+        id: types
       - run: npm run build:frontend
+        id: build
       - name: Summary
         if: always()
         run: node scripts/ci-summary.mjs Static '${{ job.status }}'
+        env:
+          CI_STEP_OUTCOMES: '{"lint":"${{ steps.lint.outcome }}","types":"${{ steps.types.outcome }}","build":"${{ steps.build.outcome }}"}'
 
   isolated:
     name: Isolated
@@ -47,16 +52,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:unit -- --reporter=default --reporter=junit --outputFile.junit=test-results/unit/junit.xml
+        id: unit
       - run: npm run test:api -- --workers=2 --output=test-results/api/results --reporter=list,junit
+        id: api
         env:
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/api/junit.xml
       - run: npm run test:integration -- --workers=2 --output=test-results/integration/results --reporter=list,junit
+        id: integration
         env:
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/integration/junit.xml
-      - name: Summary
-        if: always()
-        run: node scripts/ci-summary.mjs Isolated '${{ job.status }}' test-results
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
         if: always()
         with:
           name: isolated-results
@@ -65,6 +71,12 @@ jobs:
             test-results/api/
             test-results/integration/
           retention-days: 7
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs Isolated '${{ job.status }}' test-results
+        env:
+          CI_STEP_OUTCOMES: '{"unit":"${{ steps.unit.outcome }}","api":"${{ steps.api.outcome }}","integration":"${{ steps.integration.outcome }}"}'
+          CI_ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
 
   contracts:
     name: Contracts
@@ -87,17 +99,22 @@ jobs:
       - name: Download pinned Python and Schemathesis outside bounded tests
         run: uvx --python 3.12 --from schemathesis==4.32.7 schemathesis --version
       - run: npm run test:contract -- --workers=2 --output=test-results/contracts/results --reporter=list,junit
+        id: contracts
         env:
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/contracts/junit.xml
-      - name: Summary
-        if: always()
-        run: node scripts/ci-summary.mjs Contracts '${{ job.status }}' test-results/contracts
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
         if: always()
         with:
           name: contract-results
           path: test-results/contracts/
           retention-days: 7
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs Contracts '${{ job.status }}' test-results/contracts
+        env:
+          CI_STEP_OUTCOMES: '{"contracts":"${{ steps.contracts.outcome }}"}'
+          CI_ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
 
   compose:
     name: Compose system
@@ -116,20 +133,28 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Build reusable images once
+        id: build
         run: npm run test:compose:build
       - name: Verify failure diagnostics and cleanup
+        id: probes
         run: npm run test:compose:failures
       - name: Fresh stack per backend scenario and single browser journey
+        id: system
         run: npm run test:compose:system
       - name: Fallback project-scoped teardown
+        id: fallback
         if: always()
         run: npm run test:compose:cleanup
-      - name: Summary
-        if: always()
-        run: node scripts/ci-summary.mjs 'Compose system' '${{ job.status }}' test-results/compose
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
         if: always()
         with:
           name: compose-results
           path: test-results/compose/
           retention-days: 7
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs 'Compose system' '${{ job.status }}' test-results/compose
+        env:
+          CI_STEP_OUTCOMES: '{"build":"${{ steps.build.outcome }}","probes":"${{ steps.probes.outcome }}","system":"${{ steps.system.outcome }}","fallback":"${{ steps.fallback.outcome }}"}'
+          CI_ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}

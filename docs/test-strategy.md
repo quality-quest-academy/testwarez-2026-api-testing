@@ -99,6 +99,34 @@ Generated checks are bounded, not exhaustive. Mock NBP does not prove live-provi
 compatibility. Stock validation is not reservation; idempotency coverage is
 sequential, not a high-concurrency guarantee.
 
+### CI summaries and focused-test guardrails (KAN-22)
+
+Summaries show each group's purpose, job outcome, step outcomes where available,
+suite-labelled evidence and limits. Static reports lint/type/build outcomes, not
+runtime tests or a nonexistent test artifact. Missing, skipped or partial reports
+are not passes. Summaries run after the configured seven-day scoped uploads and
+link to the actual artifact URL when available; failed/absent uploads fall back
+to workflow step logs, not an assumed artifact. Early failures always retain
+the workflow step logs as the diagnostic location.
+
+JUnit testcase evidence is counted once, without adding parent/child suite totals.
+Contracts keeps Playwright orchestration/examples, Schemathesis JUnit **operation**
+cases and generated **request** counts from Schemathesis logs separate. These are
+different measures, not an additive grand total.
+
+Compose reports assertion-probe and startup-probe verification separately from
+checkout, stale-price/version, stale-version-only and browser results. Verification
+requires the specific expected failure, original diagnostics and successful
+project cleanup; a failed business assertion remains a failure. Fallback removal
+is reported separately and never substitutes for original cleanup evidence. The
+reporter does not modify original JUnit/logs, scenario execution or teardown.
+
+Under `CI=true`, all Playwright configurations reject `test.only` and Vitest uses
+`allowOnly: false`. Local focused debugging remains available outside CI for
+unit/API/integration/contract/browser suites. Compose retains its unconditional
+`forbidOnly`. Disposable collection-only focus probes require no services or
+application defect; remove their files before running normal validation.
+
 ## Public repository safety and merge gate
 
 Only disposable GitHub-hosted runners execute PR code. Workflow permission is

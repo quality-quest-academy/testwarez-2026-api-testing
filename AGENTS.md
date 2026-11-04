@@ -18,8 +18,8 @@ task, implementing a Jira ticket, or troubleshooting:**
 - CI strategy → section 12; ticket order/backlog → section 13.
 - Agent rules and out-of-scope for MVP → sections 14–15.
 
-Key rules from the plan: work one Jira ticket at a time (currently the project
-starts at KAN-5); respect approved decisions (TypeScript + Fastify, Vite +
+Key rules from the plan: work one Jira ticket at a time; respect approved
+decisions (TypeScript + Fastify, Vite +
 Vanilla TS frontend, Schemathesis required, GitHub Actions) and delegate only the
 ticket-scoped choices it explicitly delegates; validate/lint contracts before
 implementing endpoints; never couple services via direct cross-database access;
@@ -68,6 +68,28 @@ Never weaken checks or use personal credentials in Actions. Local Compose system
 commands require an explicit unique CI_IMAGE_TAG and free loopback ports; they
 must not adopt/reset developer projects or fall back to local app fixtures.
 
+## Delivery workflow
+
+- Inspect `git status` and fetch current remote state before choosing a branch;
+  preserve existing work. Start ticket-scoped work on a branch from current
+  `origin/main`, not directly on `main`. Use Conventional Commits below.
+- Run the relevant local checks; the full local gate is `npm run check` plus
+  `npm run test:contract`. Pre-download the pinned Schemathesis tool before its
+  bounded invocation when needed. Local fixtures do not prove Compose wiring.
+- When remote delivery is authorized, push the ticket branch and open a PR.
+  Keep it up to date with `main` without discarding others' changes. All four
+  required checks must pass for the latest revision, including documentation-only
+  changes; new commits require new checks. Do not push directly to `main`.
+- Investigate failures using scoped artifacts. Never bypass rules, weaken/remove
+  required checks, add blanket retries or use an administrator merge override to
+  finish a ticket. Uploaded artifacts alone do not prove check success; during
+  a GitHub incident, report the blocker and wait for actual check conclusions.
+- Merge normally only when authorized and the required checks are green; verify
+  the resulting `main`-push run. Report run/PR links, acceptance evidence and
+  limitations before marking the ticket complete. Merge-rule administration is
+  separately owner-authorized work: read actual settings first and preserve
+  unrelated protections; the versioned ruleset JSON is not automatically applied.
+
 ## MCP servers
 
 `opencode.jsonc` defines a Jira MCP server via `mcp-atlassian`
@@ -89,11 +111,25 @@ variables are added. Likewise never read the GitHub token (see below).
 
 ## Git authentication
 
-Push/pull uses Git Credential Manager with a fine-grained GitHub token stored in
-Windows Credential Manager. **Agents never see or handle the token.** If
-authentication fails (e.g. expired token), tell the user to replace it
-themselves — agents never see it. Have the user run this in a PowerShell window
-(any folder works):
+Use existing Git Credential Manager authentication or the owner's authenticated
+GitHub CLI. **Agents never see or handle tokens or inspect credential stores.**
+Verify read access with `git ls-remote origin` and repository capabilities with
+`gh api`; read/admin flags do not prove workflow-write permission.
+
+If the saved Git helper cannot write workflows but the owner has authorized the
+CLI, use it for that command only, without changing persistent Git configuration:
+
+```powershell
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -u origin HEAD
+```
+
+For an OAuth `workflow`-scope rejection, ask the owner to run
+`gh auth refresh --hostname github.com --scopes workflow` and complete GitHub
+authorization themselves. Never request a pasted token or pass personal/admin
+authentication into Actions. Permission changes beyond the task require approval.
+
+For expired fine-grained credentials, have the owner replace them themselves in
+a PowerShell window (any folder works; agents never run this token-handling code):
 
 ```powershell
 "protocol=https`nhost=github.com`nusername=github`n" | git credential reject 2>$null
@@ -109,8 +145,10 @@ $t = $null; $b = $null; $sec = $null
 ```
 
 Then verify with `git ls-remote origin` (no prompt = stored credential works).
-Token scope for agents to remember: fine-grained PAT, this repository only,
-**Contents: Read and write** — never embed it in remote URLs or config files.
+Fine-grained PAT permissions: this repository only, **Contents: Read and write**;
+**Workflows: Read and write** only when editing workflow files, and
+**Administration: Read and write** only for explicitly authorized rule setup.
+Never embed credentials in remote URLs, config files or Actions secrets.
 
 ## Commits
 

@@ -1,8 +1,17 @@
 # Secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Local planning documents (never published or committed; owner-controlled)
 Implementation Plan.md
+
+# Local exploratory reports and evidence (outside test-run cleanup)
+/exploration-reports/
 
 # Dependencies and generated output
 node_modules/
@@ -18,3 +27,9 @@ playwright-report/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal

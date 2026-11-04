@@ -55,6 +55,11 @@ readiness endpoints are `/health`. Orders reaches Products and the mock only via
 the Compose network; each API mounts its own named volume and only opens its own
 SQLite file.
 
+Published ports bind only to `127.0.0.1` on the Docker host, not its LAN interfaces.
+The APIs are unauthenticated demo services: do not publish them through a tunnel,
+reverse proxy or public port forwarding. Recreate any already-running containers
+with the startup command above to apply port-binding changes.
+
 The browser fetches indicative FX directly from the local NBP mock. The UI host
 forwards `/api/products/*` and `/api/orders/*` to the respective APIs; it does
 not calculate final prices. No Jira credentials are needed by Compose.
@@ -256,3 +261,9 @@ not the live provider. Repository publication remains the owner's decision.
 Never commit credentials, `.env`, local databases or the owner-controlled local
 implementation plan. Work one Jira ticket at a time; validate contracts before
 implementing endpoints and keep them synchronized as each slice lands.
+
+Git and Docker exclusions cover `.env` variants (except `.env.example`), common
+private-key files, local databases and exploratory evidence. These are guardrails,
+not secret detection: inspect staged changes and history before publishing, and
+keep `.env.example` placeholder-only. Do not run unreviewed contributions in a
+working environment that has personal credentials or access to developer data.

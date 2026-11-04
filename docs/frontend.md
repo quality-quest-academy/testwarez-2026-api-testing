@@ -22,6 +22,9 @@ npm run dev:frontend
 The last command runs in another terminal, with the UI again at port 5173.
 Vite serves the local lab; its preview server is **not production hosting**.
 Demo PATCH administration is unauthenticated. Do not expose this stack publicly.
+Compose publishes all four service ports only on host loopback (`127.0.0.1`);
+container listeners remain reachable on the private Compose network. Do not
+override these bindings for LAN/public access or tunnel the unauthenticated demo.
 
 ### Configuration and browser CORS
 

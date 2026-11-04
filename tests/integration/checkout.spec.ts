@@ -1,17 +1,11 @@
 import { expect } from '@playwright/test';
-import type { Order, OrdersDatabase } from '../../apps/orders-api/src/database.js';
+import type { Order } from '../../apps/orders-api/src/database.js';
+import { expectStoredCounts } from '../helpers/orders-assertions.js';
 import { readCart } from '../scenarios/cart.js';
 import { test } from './fixtures.js';
 
 // Reusing this key across tests is intentional: every test has its own database.
 const headers = { 'Idempotency-Key': 'integration-checkout-0001' };
-
-// Test-only inspection of Orders' own store proves absence of partial writes.
-// Neither running service is given access to the other's SQLite connection.
-function expectStoredCounts(database: OrdersDatabase, count: number) {
-  expect(database.connection.prepare('SELECT count(*) AS count FROM orders').get()).toEqual({ count });
-  expect(database.connection.prepare('SELECT count(*) AS count FROM idempotency_records').get()).toEqual({ count });
-}
 
 test('catalog to multi-item checkout crosses both real APIs with deterministic NBP', async ({ request, backend }) => {
   expectStoredCounts(backend.database, 0);

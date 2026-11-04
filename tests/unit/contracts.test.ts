@@ -1,60 +1,17 @@
-import SwaggerParser from '@apidevtools/swagger-parser';
-import Ajv from 'ajv-draft-04';
-import addFormats from 'ajv-formats';
-import type { OpenAPIV3 } from 'openapi-types';
 import { describe, expect, it } from 'vitest';
+import { authoredExamples, loadContract } from './helpers/contract-examples.js';
 
-type ObjectValue = Record<string, unknown>;
-
-function isObject(value: unknown): value is ObjectValue {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-// These are schema-tooling unit tests, not tests against an implemented API.
-// No nullable or other OpenAPI-only validation keywords are used by these specs.
-// Explicit .default supports these CommonJS packages under NodeNext typing.
-const ajv = new Ajv.default({ strict: false, allErrors: true });
-addFormats.default(ajv);
-
-for (const service of ['products', 'orders']) {
+for (const service of ['products', 'orders'] as const) {
   describe(`${service} OpenAPI contract`, async () => {
-    const path = `contracts/${service}.openapi.yaml`;
-    await SwaggerParser.validate(path);
-    const document = await SwaggerParser.dereference(path) as OpenAPIV3.Document;
-    const schemas = document.components?.schemas as Record<string, ObjectValue>;
-
-    function validateExample(schema: object, value: unknown) {
-      const validate = ajv.compile(schema);
-      expect(validate(value), JSON.stringify(validate.errors)).toBe(true);
-    }
+    const { document, schemas, ajv } = await loadContract(service);
 
     it('validates every authored schema, request, response and parameter example', () => {
-      let checked = 0;
-      function visit(value: unknown) {
-        if (Array.isArray(value)) {
-          value.forEach(visit);
-          return;
-        }
-        if (!isObject(value)) return;
-        const schema = isObject(value.schema) ? value.schema : value;
-        if ('example' in value) {
-          validateExample(schema, value.example);
-          checked++;
-        }
-        if (isObject(value.schema) && isObject(value.examples)) {
-          for (const example of Object.values(value.examples)) {
-            if (isObject(example) && 'value' in example) {
-              validateExample(value.schema, example.value);
-              checked++;
-            }
-          }
-        }
-        for (const [key, child] of Object.entries(value)) {
-          if (key !== 'example' && key !== 'examples') visit(child);
-        }
+      const examples = authoredExamples(document);
+      expect(examples.length).toBeGreaterThan(0);
+      for (const { schema, value } of examples) {
+        const validate = ajv.compile(schema);
+        expect(validate(value), JSON.stringify(validate.errors)).toBe(true);
       }
-      visit(document);
-      expect(checked).toBeGreaterThan(0);
     });
 
     it('rejects numeric, negative, null and incorrectly formatted money', () => {

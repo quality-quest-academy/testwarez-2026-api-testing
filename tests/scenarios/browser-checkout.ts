@@ -1,18 +1,19 @@
 import { expect, type Page, type APIRequestContext } from '@playwright/test';
+import { ShopPage } from '../e2e/pages/shop-page.js';
 
 export async function browserCheckout({ page, request, shop }: { page: Page; request: APIRequestContext; shop: string }) {
   // Defense in depth: this flow must never contact the public FX provider.
   await page.route('https://api.nbp.pl/**', (route) => route.abort());
-  await page.goto(shop);
-  await expect(page.getByRole('heading', { name: 'Catalog', exact: true })).toBeVisible();
-  await expect(page.getByTestId('offer-102').getByRole('button')).toBeDisabled();
-  await page.getByRole('button', { name: 'Add Demo keyboard from Alpha', exact: true }).click();
-  await page.getByRole('spinbutton', { name: 'Quantity for Demo keyboard from Alpha', exact: true }).fill('2');
-  await page.getByRole('spinbutton', { name: 'Quantity for Demo keyboard from Alpha', exact: true }).press('Tab');
-  await page.getByRole('button', { name: 'Add Demo mouse from Gamma', exact: true }).click();
-  await expect(page.getByTestId('indicative-total')).toHaveText('Indicative total: 915.90 PLN');
-  await page.reload();
-  await expect(page.getByRole('spinbutton', { name: 'Quantity for Demo keyboard from Alpha', exact: true })).toHaveValue('2');
+  const storefront = new ShopPage(page, shop);
+  await storefront.open();
+  await expect(storefront.catalogHeading).toBeVisible();
+  await expect(storefront.offerButton('offer-102')).toBeDisabled();
+  await storefront.addOffer('Demo keyboard', 'Alpha');
+  await storefront.setQuantity('Demo keyboard', 'Alpha', 2);
+  await storefront.addOffer('Demo mouse', 'Gamma');
+  await expect(storefront.indicativeTotal).toHaveText('Indicative total: 915.90 PLN');
+  await storefront.reload();
+  await expect(storefront.quantity('Demo keyboard', 'Alpha')).toHaveValue('2');
   // Test-data arrangement only: change stock/version after the shopper accepted
   // the offer. API tests already prove conflict codes and transactional writes.
   const update = await request.patch(`${shop}/api/products/offers/offer-101`, { data: { stock: 7 } });
@@ -21,20 +22,20 @@ export async function browserCheckout({ page, request, shop }: { page: Page; req
   page.on('request', (request) => {
     if (request.method() === 'POST' && request.url() === `${shop}/api/orders/orders`) submissions++;
   });
-  await page.getByRole('button', { name: 'Place order', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('OFFER_CHANGED');
-  await expect(page.getByRole('button', { name: 'Place order', exact: true })).toBeDisabled();
-  await expect(page.getByText('Accepted: 89.00 EUR · version 3', { exact: true })).toBeVisible();
-  await expect(page.getByText('Current: 89.00 EUR · version 4 · 7 available', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Order confirmed', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Accept current offers', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Press Place order');
+  await storefront.placeOrder();
+  await expect(storefront.status).toContainText('OFFER_CHANGED');
+  await expect(storefront.placeOrderButton).toBeDisabled();
+  await expect(storefront.acceptedOffer('89.00 EUR · version 3')).toBeVisible();
+  await expect(storefront.currentOffer('89.00 EUR · version 4 · 7 available')).toBeVisible();
+  await expect(storefront.confirmationHeading).toHaveCount(0);
+  await storefront.acceptCurrentOffers();
+  await expect(storefront.status).toContainText('Press Place order');
   expect(submissions).toBe(1); // Refresh and acceptance are not checkout retries.
-  await page.getByRole('button', { name: 'Place order', exact: true }).click();
-  const confirmation = page.getByRole('region', { name: 'Order confirmed', exact: true });
+  await storefront.placeOrder();
+  const confirmation = storefront.confirmation;
   await expect(confirmation).toContainText('Final total from Orders: 915.90 PLN');
   await expect(confirmation).toContainText('Demo keyboard × 2');
   await expect(confirmation).toContainText('Demo mouse × 1');
   expect(submissions).toBe(2);
-  await expect(page.getByRole('button', { name: 'Place order', exact: true })).toBeDisabled();
+  await expect(storefront.placeOrderButton).toBeDisabled();
 }

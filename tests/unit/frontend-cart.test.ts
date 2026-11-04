@@ -10,20 +10,34 @@ const offer: Offer = {
 };
 
 describe('browser cart state (no HTTP or browser)', () => {
-  it('combines the same offer, supports quantities/removal, and submits only expectations', () => {
+  it('combines repeated offers and calculates the accepted multi-item subtotal', () => {
     let state = addOffer(addOffer(emptyCart(), offer), offer);
     state = addOffer(state, { ...offer, id: 'offer-205', price: '35.00' });
     expect(state.items).toHaveLength(2);
     expect(subtotal(state.items)).toBe('213.00');
     expect(indicativeTotal('213.00', '4.3000')).toBe('915.90');
+  });
+
+  it('submits only accepted expectations, not display prices or a final total', () => {
+    const state = changeQuantity(addOffer(emptyCart(), offer), offer.id, 2);
+
     expect(checkoutItems(state.items)[0]).toEqual({
       offerId: offer.id, quantity: 2, expectedUnitPrice: '89.00', expectedOfferVersion: 3,
     });
     expect(checkoutItems(state.items)[0]).not.toHaveProperty('total');
-    expect(changeQuantity(state, offer.id, 0)).toBe(state);
-    expect(changeQuantity(state, offer.id, 1.5)).toBe(state);
-    expect(changeQuantity(state, offer.id, 101)).toBe(state);
-    expect(removeItem(state, offer.id).items).toHaveLength(1);
+  });
+
+  it.each([0, 1.5, 101])('ignores invalid quantity %s', (quantity) => {
+    const state = addOffer(emptyCart(), offer);
+    expect(changeQuantity(state, offer.id, quantity)).toBe(state);
+  });
+
+  it('removes the selected offer without removing other cart items', () => {
+    const state = addOffer(addOffer(emptyCart(), offer), { ...offer, id: 'offer-205' });
+    expect(removeItem(state, offer.id).items.map((item) => item.offerId)).toEqual(['offer-205']);
+  });
+
+  it('does not add an unavailable offer', () => {
     expect(addOffer(emptyCart(), { ...offer, stock: 0 }).items).toEqual([]);
   });
 

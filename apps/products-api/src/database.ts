@@ -37,9 +37,14 @@ export class ProductsDatabase {
 
   constructor(filename: string) {
     this.connection = new DatabaseSync(filename, { enableForeignKeyConstraints: true });
-    this.connection.exec('PRAGMA foreign_keys = ON;');
-    this.createSchema();
-    this.seed();
+    try {
+      this.connection.exec('PRAGMA foreign_keys = ON;');
+      this.createSchema();
+      this.seed();
+    } catch (error) {
+      this.connection.close();
+      throw error;
+    }
   }
 
   close() { this.connection.close(); }
@@ -134,8 +139,8 @@ export class ProductsDatabase {
           AND length(price) - length(replace(price, '.', '')) = 1
         ),
         currency TEXT NOT NULL CHECK (currency = 'EUR'),
-        stock INTEGER NOT NULL CHECK (stock >= 0),
-        version INTEGER NOT NULL CHECK (version >= 1)
+        stock INTEGER NOT NULL CHECK (typeof(stock) = 'integer' AND stock >= 0),
+        version INTEGER NOT NULL CHECK (typeof(version) = 'integer' AND version >= 1)
       );
     `);
   }

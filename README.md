@@ -4,7 +4,7 @@ A small educational monorepo showing why different API-testing levels exist:
 exploratory requests, tests in code, OpenAPI checks, controlled dependencies and
 data, and deliberate CI feedback. Clarity and repeatability come before features.
 
-## Current state (KAN-14)
+## Current state (KAN-15)
 
 - The Products service owns a SQLite schema plus deterministic catalog, supplier
   and offer seed data, and implements its health, catalog, batch offer-resolution
@@ -37,8 +37,10 @@ data, and deliberate CI feedback. Clarity and repeatability come before features
   exploration is separate from the automated regression gate.
 
 `compose.yaml` runs Products, Orders, the deterministic NBP mock and frontend,
-with separate named SQLite volumes and health checks. Bruno and CI remain later
-tickets.
+with separate named SQLite volumes and health checks. GitHub Actions runs four
+blocking groups: Static, Isolated, Contracts and Compose system (including the
+single Chromium journey). Bruno and the conference walkthrough remain KAN-16.
+See [test selection and CI evidence](docs/test-strategy.md).
 
 ## Run the demo with Docker Compose
 
@@ -182,8 +184,10 @@ no partial writes; the services communicate exclusively over HTTP.
 
 These are controlled backend integration tests, not proof of live-NBP
 compatibility, browser behavior or container configuration. Local tests run the
-real app factories/listeners in Playwright workers; Compose-based CI orchestration
-remains KAN-15. See [decisions](docs/decisions.md#backend-integration-tests-kan-13).
+real app factories/listeners in Playwright workers. The separate
+[Compose system gate](docs/test-strategy.md) explicitly targets container HTTP
+ports and starts fresh projects/volumes per scenario.
+See [decisions](docs/decisions.md#backend-integration-tests-kan-13).
 
 On Windows with pinned Node 24.11.1, parallel workers have printed
 `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` at shutdown after all

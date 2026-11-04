@@ -297,6 +297,34 @@ Real-NBP compatibility is a separate optional, non-blocking check.
   remains a separate initiative. See [frontend.md](frontend.md) for setup,
   verified CORS behavior, safety boundaries and retry limitations.
 
+## Required hosted CI and disposable system tests (KAN-15)
+
+- Four stable required jobs: **Static**, **Isolated**, **Contracts**, **Compose
+  system**. GitHub Actions runs on PRs and pushes to main, on pinned Ubuntu 24.04
+  with pinned action revisions, read-only contents permission and no persisted
+  checkout credentials. No personal secrets, self-hosted runners, privileged
+  PR-target execution, paid reporting or preview hosting.
+- Keep Docker-free local fixtures and white-box database/dependency assertions.
+  Separate `tests/compose/` execution uses only public HTTP against published
+  container ports; missing explicit target configuration fails. Reuse the cart
+  reader and the single browser scenario, not a second browser journey.
+- Build explicitly tagged images once, then run three backend scenarios and the
+  browser serially in four fresh project/volume sets. Build-time browser FX uses
+  the host-accessible mock; runtime service URLs stay on the Compose network.
+  Always specify `.env.example`, never load the root credential-bearing `.env`.
+- Bounded health-driven readiness, zero retries, per-scenario diagnostics before
+  project-scoped teardown, verified resource removal and workflow fallback cleanup.
+  Expected-failure lifecycle probes continuously cover browser assertion failure
+  and partial startup (Orders exit 42), without suppressing normal test failures.
+- npm/uv download caches only initially; scoped JUnit, Schemathesis log/JUnit/HAR,
+  browser failure traces/screenshots and Compose diagnostics retained seven days.
+  No shared mutable state, public NBP, global Docker prune or database artifacts.
+- Enforce repository-level main rules after successful hosted checks: all four
+  GitHub Actions checks, up-to-date branch, PR required, zero approving reviews,
+  no force pushes/deletion or routine administrator bypass. No paid features.
+  Actual run evidence, timing measurements and rule verification belong in
+  [test-strategy.md](test-strategy.md), not an unverified completion claim.
+
 ## Incremental delivery
 
 KAN-5 adds no functional endpoints (including health), SQLite files, frontend,

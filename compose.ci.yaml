@@ -1,0 +1,14 @@
+# Always pair with compose.yaml and --env-file .env.example. Tags are shared
+# across fresh projects; never rebuild separately for each mutating scenario.
+services:
+  products-api:
+    image: testwarez-ci-products:${CI_IMAGE_TAG:?Set CI_IMAGE_TAG}
+  orders-api:
+    image: testwarez-ci-orders:${CI_IMAGE_TAG:?Set CI_IMAGE_TAG}
+  nbp-mock:
+    image: testwarez-ci-nbp:${CI_IMAGE_TAG:?Set CI_IMAGE_TAG}
+  frontend:
+    image: testwarez-ci-frontend:${CI_IMAGE_TAG:?Set CI_IMAGE_TAG}
+    build:
+      args:
+        FRONTEND_FX_URL: http://127.0.0.1:3003/api/exchangerates/rates/a/eur/

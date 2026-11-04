@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
 import { test } from './fixtures.js';
 import { browserCheckout } from '../scenarios/browser-checkout.js';
@@ -12,6 +13,9 @@ test('catalog → cart → explicit conflict review → checkout → confirmatio
     expect(traffic).toContainEqual({ url: 'http://127.0.0.1:3003/api/exchangerates/rates/a/eur/', status: 200, method: 'GET' });
     expect(traffic).toContainEqual({ url: `${shop}/api/orders/orders`, status: 201, method: 'POST' });
   } finally {
-    await testInfo.attach('container-browser-http.json', { body: JSON.stringify(traffic, null, 2), contentType: 'application/json' });
+    const file = testInfo.outputPath('container-browser-http.json');
+    await mkdir(testInfo.outputDir, { recursive: true });
+    await writeFile(file, JSON.stringify(traffic, null, 2));
+    await testInfo.attach('container-browser-http.json', { path: file, contentType: 'application/json' });
   }
 });

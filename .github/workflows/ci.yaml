@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    name: Static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run contracts:lint
+      - run: npm run typecheck
+      - run: npm run build:frontend
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs Static '${{ job.status }}'
+
+  isolated:
+    name: Isolated
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit -- --reporter=default --reporter=junit --outputFile.junit=test-results/unit/junit.xml
+      - run: npm run test:api -- --workers=2 --output=test-results/api/results --reporter=list,junit
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/api/junit.xml
+      - run: npm run test:integration -- --workers=2 --output=test-results/integration/results --reporter=list,junit
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/integration/junit.xml
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs Isolated '${{ job.status }}' test-results
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: isolated-results
+          path: |
+            test-results/unit/
+            test-results/api/
+            test-results/integration/
+          retention-days: 7
+
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.9.9'
+          enable-cache: true
+          cache-dependency-glob: tests/contract/*.toml
+      - run: npm ci
+      - name: Download pinned Python and Schemathesis outside bounded tests
+        run: uvx --python 3.12 --from schemathesis==4.32.7 schemathesis --version
+      - run: npm run test:contract -- --workers=2 --output=test-results/contracts/results --reporter=list,junit
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/contracts/junit.xml
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs Contracts '${{ job.status }}' test-results/contracts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: contract-results
+          path: test-results/contracts/
+          retention-days: 7
+
+  compose:
+    name: Compose system
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI_IMAGE_TAG: run-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build reusable images once
+        run: npm run test:compose:build
+      - name: Verify failure diagnostics and cleanup
+        run: npm run test:compose:failures
+      - name: Fresh stack per backend scenario and single browser journey
+        run: npm run test:compose:system
+      - name: Fallback project-scoped teardown
+        if: always()
+        run: npm run test:compose:cleanup
+      - name: Summary
+        if: always()
+        run: node scripts/ci-summary.mjs 'Compose system' '${{ job.status }}' test-results/compose
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compose-results
+          path: test-results/compose/
+          retention-days: 7

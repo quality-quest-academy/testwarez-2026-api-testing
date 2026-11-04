@@ -25,8 +25,9 @@ CLI**; it does not replace generated testing with hand-written requests. The
 exact invocation is printed by `tests/contract/generated.spec.ts`. A nonzero CLI
 exit or an unavailable tool fails the test, rather than silently skipping it.
 `npm run check` stays Python-free; run **both** `npm run check` and
-`npm run test:contract` for the complete current gate. GitHub Actions wiring is
-KAN-15 work.
+`npm run test:contract` for the complete local gate. GitHub Actions runs this full
+command in the required **Contracts** check, after a separate pinned-tool download
+step. npm and uv downloads are cached, not generated test state.
 
 ## Controlled setup and generation budget
 
@@ -117,7 +118,11 @@ provides the separate HTTP-level generated checks.
 CLI output is saved as `schemathesis.log` and attached to the Playwright result.
 The log, JUnit XML and HTTP HAR reports
 are saved under `test-results/generated-Schemathesis-*/schemathesis/`; these are
-gitignored and replaced by later Playwright runs. On failure the full CLI output
+gitignored and replaced by later Playwright runs. In CI the isolated
+`test-results/contracts/results/` directory holds these files and
+`test-results/contracts/junit.xml` holds Playwright's report; subsequent suites do
+not erase them. The `contract-results` artifact retains them for seven days.
+On failure the full CLI output
 includes the operation, schema constraint, actual response and reproducing curl
 request. Fixture ports disappear after teardown: rerun the command against fresh
 state rather than expecting an old curl URL to remain available. HAR files make

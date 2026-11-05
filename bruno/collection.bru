@@ -1,0 +1,16 @@
+script:pre-request {
+  // Guard against accidentally retargeting mutating examples. Not a security boundary.
+  const url = bru.interpolate(req.getUrl());
+  if (!/^http:\/\/127\.0\.0\.1:(3001|3002)\//.test(url)) {
+    throw new Error('Use the Local environment and an approved disposable loopback stack');
+  }
+  req.setMaxRedirects(0);
+  req.setTimeout(5000);
+}
+
+docs {
+  Read ../docs/demo.md before running. Use fresh disposable Compose data.
+  Send 01–12 in order, in one session; do not parallelize or repeat on mutated data.
+  Request 07 changes an offer. Request 10 explicitly accepts the reviewed cart.
+  Captures are runtime-only. Safe sandbox; no secrets, external libraries or .env.
+}

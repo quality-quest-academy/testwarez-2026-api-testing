@@ -1,0 +1,19 @@
+meta {
+  name: 01 Catalog and supplier offers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{productsUrl}}/products
+  body: none
+  auth: none
+}
+
+tests {
+  test('Catalog has multiple supplier offers', function () {
+    expect(res.status).to.equal(200);
+    expect(res.body).to.have.length(2);
+    expect(res.body[0].offers).to.have.length(2);
+  });
+}

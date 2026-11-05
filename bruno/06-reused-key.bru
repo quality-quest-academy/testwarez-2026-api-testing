@@ -1,0 +1,27 @@
+meta {
+  name: 06 Change quantity under successful key
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{ordersUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: {{checkoutKey}}
+}
+
+body:json {
+  {{changedCart}}
+}
+
+tests {
+  test('A successful key cannot identify a different cart', function () {
+    expect(res.status).to.equal(409);
+    expect(res.body.code).to.equal('IDEMPOTENCY_KEY_REUSED');
+  });
+}

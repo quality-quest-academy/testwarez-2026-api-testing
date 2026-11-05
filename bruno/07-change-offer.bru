@@ -1,0 +1,31 @@
+meta {
+  name: 07 Change accepted offer - mutates disposable data
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{productsUrl}}/offers/offer-101
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  { "price": "90.00" }
+}
+
+tests {
+  test('Real change increments the seeded version', function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.price).to.equal('90.00');
+    expect(res.body.version).to.equal(4);
+  });
+}
+
+docs {
+  Only send against your disposable project. Restoring the price will not restore version 3.
+}

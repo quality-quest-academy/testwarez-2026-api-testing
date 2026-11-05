@@ -1,0 +1,29 @@
+meta {
+  name: 11 Unavailable supplier offer
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{ordersUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: bruno-unavailable-0001
+}
+
+body:json {
+  { "items": [{ "offerId": "offer-102", "quantity": 1,
+    "expectedUnitPrice": "91.00", "expectedOfferVersion": 1 }] }
+}
+
+tests {
+  test('Zero stock is a business conflict', function () {
+    expect(res.status).to.equal(409);
+    expect(res.body.code).to.equal('OFFER_UNAVAILABLE');
+    expect(res.body.offerIds).to.deep.equal(['offer-102']);
+  });
+}

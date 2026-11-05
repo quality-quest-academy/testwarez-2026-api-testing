@@ -1,0 +1,38 @@
+meta {
+  name: 03 Create multi-item order
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{ordersUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: {{checkoutKey}}
+}
+
+body:json {
+  {{acceptedCart}}
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar('orderId', res.body.id);
+    bru.setVar('orderSnapshot', JSON.stringify(res.body));
+    bru.setVar('orderLocation', res.headers.location);
+  }
+}
+
+tests {
+  test('Checkout has the deterministic total and Location', function () {
+    expect(res.status).to.equal(201);
+    expect(res.body.subtotalEUR).to.equal('213.00');
+    expect(res.body.exchangeRate).to.equal('4.3000');
+    expect(res.body.total).to.equal('915.90');
+    expect(res.headers.location).to.equal('/orders/' + res.body.id);
+  });
+}

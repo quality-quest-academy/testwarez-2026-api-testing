@@ -11,7 +11,7 @@ info:
     url: https://opensource.org/license/mit/
 servers:
   - url: http://localhost:3001
-    description: Planned local Products service
+    description: Local Products service
 tags:
   - name: Health
     description: Service readiness

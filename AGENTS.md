@@ -4,10 +4,12 @@ Notes for AI agents working in this repository.
 
 ## Implementation plan (read first)
 
-`Implementation Plan.md` at the repo root is the **authoritative source of truth**
+For owner/agent work, `Implementation Plan.md` at the repo root is the **authoritative source of truth**
 for scope, architecture, contracts, and ticket order (it is deliberately
 gitignored — local-only, owner-controlled; never commit, publish, or quote
-sensitive URLs from it outside this repo).
+sensitive URLs from it outside this repo). Public readers do not need this file:
+README.md and docs/ describe the runnable repository. If the local plan is absent,
+ask the owner for task direction rather than attempting to publish/reconstruct it.
 
 **Always consult the relevant sections of the plan before and while working on a
 task, implementing a Jira ticket, or troubleshooting:**
@@ -23,13 +25,13 @@ decisions (TypeScript + Fastify, Vite +
 Vanilla TS frontend, Schemathesis required, GitHub Actions) and delegate only the
 ticket-scoped choices it explicitly delegates; validate/lint contracts before
 implementing endpoints; never couple services via direct cross-database access;
-do not claim contracts, apps, mocks, tests, or CI exist before they do. Note that
-the plan's KAN-5 first step mentions committing the plan to the repo — the owner
-has instead chosen to keep it gitignored; follow the owner's choice.
+do not claim contracts, apps, mocks, tests, or CI exist before they do. The owner
+has chosen to keep the plan gitignored despite its original bootstrap wording;
+follow the owner's choice.
 
 ## Repo state
 
-KAN-5–15 provide npm workspaces, authored OpenAPI 3.0.3 contracts, Products
+The repository provides npm workspaces, authored OpenAPI 3.0.3 contracts, Products
 endpoints with seeded SQLite, an NBP HTTP adapter/mock, and Orders checkout with
 private SQLite snapshots. Orders atomically persists successful idempotency keys
 and replays sequential retries without dependency calls; changed payloads return
@@ -99,7 +101,7 @@ repo root. Prerequisites: `uvx` installed and valid `JIRA_URL` / `JIRA_USERNAME`
 
 It also defines pinned Playwright MCP 0.0.84 for later local exploratory work,
 using installed Edge, an isolated in-memory profile and loopback-only origin
-guardrails. See `docs/frontend.md`. MCP is not the regression runner. Do not
+guardrails. See `docs/browser-exploration.md`. MCP is not the regression runner. Do not
 access credentials, personal browser profiles, external sites or developer data
 through browser tools. A broader exploratory session is a separate initiative.
 

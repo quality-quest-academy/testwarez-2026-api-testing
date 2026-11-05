@@ -6,6 +6,10 @@ A self-contained reading/rehearsal route for *“Kolekcja requestów to jeszcze 
 testy. 5 kroków do świadomej strategii API”*. Use the repository examples to explain
 tradeoffs, not to showcase a large framework.
 
+[Presentation slides (PDF, 26 pages, 68 MiB)](conference-slides.pdf) — the original
+Polish deck. Download it for offline reading alongside the examples below. If
+GitHub cannot preview the file, choose **Download raw file**.
+
 ## Why
 
 The talk must work **without a successful live demo**. Prepare local source files,

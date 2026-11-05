@@ -59,6 +59,7 @@ Schemathesis generation. Container wiring is a separate
 
 | Start here | What you will find |
 | --- | --- |
+| [Presentation slides (PDF, 68 MiB)](docs/conference-slides.pdf) | Original Polish slide deck for the talk |
 | [Demo and Bruno](docs/demo.md) | Setup, numbered requests, expected results and reset |
 | [Conference walkthrough](docs/conference-walkthrough.md) | Five decisions, runnable examples and offline presentation notes |
 | [Test strategy](docs/test-strategy.md) | Test selection, CI evidence and a strategy checklist |

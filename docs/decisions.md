@@ -20,6 +20,7 @@ These are current decisions, not an implementation changelog.
 | Local Fastify HTTP doubles | Exercise real dependency adapters without another mocking library; mock compatibility is not live-provider proof |
 | Vitest units; Playwright HTTP/browser tests | Fast pure tests plus one consistent HTTP/assertion API; API tests never belong in Vitest |
 | Separate Schemathesis CLI | Generated OpenAPI conformance complements explicit business tests; bounded generation is not exhaustive testing |
+| Optional brokerless Pact example | Real Orders HTTP client generates one consumer contract; real Products verifies it using isolated data, outside default test/CI gates |
 | Bruno for exploration | Versioned, readable requests with light checks; not a replacement for the automated regression strategy |
 | GitHub Actions and disposable Compose stacks | Test container wiring without hosted previews, Testcontainers or Kubernetes |
 | Zero blanket retries | Failures remain visible; isolation and bounded readiness address causes rather than conceal symptoms |
@@ -45,8 +46,10 @@ Failed attempts retain no successful key. No in-flight coordination, expiry or
 high-concurrency guarantee is implemented. See [checkout rules](architecture.md).
 
 No payment, authentication, reservation/decrement, supplier network services,
-distributed transactions, Pact, hosted preview or broad UI regression framework
-is included. Live-NBP smoke remains optional and unimplemented.
+distributed transactions, hosted preview or broad UI regression framework is
+included. [Pact](pact.md) is a small optional extension, not a replacement for
+Schemathesis or a broker/deployment workflow. Live-NBP smoke remains optional and
+unimplemented.
 
 ## How to run
 

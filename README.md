@@ -55,6 +55,11 @@ contract examples and one browser journey. `test:contract` adds pinned
 Schemathesis generation. Container wiring is a separate
 [Compose system check](docs/test-strategy.md#compose-system-checks).
 
+For an optional **consumer-driven contract** between Orders and Products, run
+`npm run test:pact`. The [Pact example](docs/pact.md) generates a local contract
+using the real Orders client, then verifies real Products—no broker or Docker.
+It is separate from the default tests and required CI checks.
+
 ## Explore and learn
 
 | Start here | What you will find |

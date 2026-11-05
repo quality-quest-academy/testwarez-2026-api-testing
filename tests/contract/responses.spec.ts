@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { offerBreakageCases, orderBreakageCases } from './data/response-cases.js';
 import { test } from './fixtures.js';
 import { responseValidator } from './response-validator.js';
 
@@ -9,18 +10,14 @@ test('Products response: valid offer and deliberate contract breakages', async (
   const validate = await responseValidator('products', '/offers/resolve', 'post', 200);
   expect(validate(offers)).toEqual([]);
 
-  const missingVersion = { ...offers[0] };
-  delete missingVersion.version;
-  for (const [label, offer, expected] of [
-    ['numeric price', { ...offers[0], price: 89 }, '/0/price must be string'],
-    ['string stock', { ...offers[0], stock: '8' }, '/0/stock must be integer'],
-    ['missing version', missingVersion, 'required property'],
-    ['forbidden null', { ...offers[0], productName: null }, '/0/productName must be string'],
-  ] as const) {
-    const diagnostics = validate([offer]);
-    console.log(`${label}: ${diagnostics.join('\n')}`);
-    expect(diagnostics.join('\n')).toContain(expected);
-    if (label === 'missing version') expect(diagnostics.join('\n')).toContain('version');
+  const firstOffer = offers[0];
+  if (firstOffer === undefined) throw new Error('Expected Products to resolve offer-101');
+  for (const { label, offer, expectedDiagnostics } of offerBreakageCases(firstOffer)) {
+    await test.step(label, async () => {
+      const diagnostics = validate([offer]);
+      console.log(`${label}: ${diagnostics.join('\n')}`);
+      for (const expected of expectedDiagnostics) expect(diagnostics.join('\n')).toContain(expected);
+    });
   }
 });
 
@@ -34,17 +31,38 @@ test('Orders response: valid snapshot, numeric total and missing required field'
   const order = await response.json() as Record<string, unknown>;
   const validate = await responseValidator('orders', '/orders', 'post', 201);
   expect(validate(order)).toEqual([]);
-  const numericTotal = validate({ ...order, total: 765.4 });
-  console.log(numericTotal.join('\n'));
-  expect(numericTotal.join('\n')).toContain('/total must be string');
-  const missingDate = { ...order };
-  delete missingDate.exchangeRateDate;
-  const diagnostics = validate(missingDate);
-  console.log(diagnostics.join('\n'));
-  expect(diagnostics.join('\n')).toContain('exchangeRateDate');
-  expect(diagnostics.join('\n')).toContain('required property');
+  for (const { label, body, expectedDiagnostics } of orderBreakageCases(order)) {
+    await test.step(label, async () => {
+      const diagnostics = validate(body);
+      console.log(`${label}: ${diagnostics.join('\n')}`);
+      for (const expected of expectedDiagnostics) expect(diagnostics.join('\n')).toContain(expected);
+    });
+  }
 
   // Deliberately wrong arithmetic still satisfies the schema. Existing isolated
   // business tests, not this validator, must catch such an error.
-  expect(validate({ ...order, total: '0.00' })).toEqual([]);
+  await test.step('schema-valid total can still be arithmetically wrong', async () => {
+    expect(validate({ ...order, total: '0.00' })).toEqual([]);
+  });
+});
+
+test('Orders response: real OFFER_CHANGED conflict conforms to the contract', async ({ apis, request }) => {
+  const resolved = await request.post(`${apis.products}/offers/resolve`, { data: { offerIds: ['offer-101'] } });
+  expect(resolved.status()).toBe(200);
+  const [offer] = await resolved.json() as { id: string; price: string; version: number }[];
+  if (offer === undefined) throw new Error('Expected Products to resolve offer-101');
+  const items = [{ offerId: offer.id, quantity: 1, expectedUnitPrice: offer.price, expectedOfferVersion: offer.version }];
+
+  // Change the real offer after accepting it, only in this test's private store.
+  const updated = await request.patch(`${apis.products}/offers/${offer.id}`, { data: { price: '90.00' } });
+  expect(updated.status()).toBe(200);
+  const response = await request.post(`${apis.orders}/orders`, {
+    headers: { 'Idempotency-Key': 'contract-offer-changed-2026' },
+    data: { items },
+  });
+  expect(response.status()).toBe(409);
+  const conflict = await response.json() as { code: string };
+  expect(conflict.code).toBe('OFFER_CHANGED');
+  const validate = await responseValidator('orders', '/orders', 'post', 409);
+  expect(validate(conflict)).toEqual([]);
 });

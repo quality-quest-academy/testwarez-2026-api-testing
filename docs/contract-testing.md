@@ -63,6 +63,12 @@ step. npm and uv downloads are cached, not generated test state.
 
 ## What is checked
 
+Selecting all eight operations is not exhaustive input, boundary, status or
+sequence coverage. Increasing example counts does not automatically improve
+business-rule coverage: generated contract checks complement explicit business
+assertions, rather than replace them. The KAN-17 decision retains the current
+bounded baseline; broader generation remains deferred.
+
 Schemathesis checks:
 
 1. No server errors.
@@ -86,8 +92,20 @@ both Products body endpoints.
 
 ## Deliberate breaking examples and diagnostics
 
-`tests/contract/responses.spec.ts` obtains actual successful HTTP responses,
-validates them, then changes **copies in the test**, never production handlers:
+`tests/contract/responses.spec.ts` also obtains one real **409 OFFER_CHANGED**
+response after updating a previously accepted offer through Products HTTP, then
+validates its body against the authored Orders conflict schema. This focused
+case uses the same private stores and mock NBP; it demonstrates an error-response
+contract path missed by the historical generated run inspected in KAN-17. It does
+not establish exhaustive conflict coverage or replace business/persistence
+assertions. It runs in the existing targeted examples and full contract suites,
+without a new CI gate or a larger generation budget.
+
+The same file obtains actual successful HTTP responses, validates them, then
+changes **copies in the test**, never production handlers.
+
+The small case factories in `tests/contract/data/response-cases.ts` define the
+mutations and expected diagnostics; labeled steps in the spec run the assertions:
 
 | Response change | Why it fails |
 | --- | --- |

@@ -58,6 +58,11 @@ npm run test:contract
 - **Limit:** all operations selected does not mean all statuses/sequences covered.
   Schema conformance is neither correct arithmetic nor consumer-driven contracts.
 
+**Optional consumer-driven contrast:** run `npm run test:pact`, then follow
+[the Pact example](pact.md): real Orders client → Pact mock → generated JSON →
+verification against real Products. It checks one consumer's expectations, not
+the whole API or checkout. No broker, CI changes or running Compose stack needed.
+
 ### 4. Is a fresh container enough isolation?
 
 - **Show:** [private backend fixtures](../tests/helpers/backend.ts), then

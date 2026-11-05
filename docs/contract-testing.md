@@ -17,8 +17,9 @@ requests provide different feedback; none replaces business assertions.
   are never broken for this demonstration. Expected rejection makes the test pass.
 - A wrong total such as `"0.00"` still satisfies the schema. Exact totals,
   no-partial-write behavior and retries need [business tests](../tests/api/orders.spec.ts).
-- A shared OpenAPI document is not consumer-driven contract testing (Pact is not
-  implemented). Controlled mock NBP checks do not prove live-provider compatibility.
+- A shared OpenAPI document is not consumer-driven contract testing. The optional
+  [Pact example](pact.md) separately checks Orders' expectations against Products.
+  Controlled mock NBP checks do not prove live-provider compatibility.
 
 Generation previously found Products' malformed-JSON error using Fastify's default
 envelope instead of `VALIDATION_ERROR`. The handler was fixed and an API regression

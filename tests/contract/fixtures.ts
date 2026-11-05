@@ -1,25 +1,19 @@
 import { test as base } from '@playwright/test';
-import type { FastifyInstance } from 'fastify';
 import { buildApp as buildProducts } from '../../apps/products-api/src/app.js';
+import { openProductsDatabase } from '../../apps/products-api/src/database.js';
 import { buildApp as buildOrders } from '../../apps/orders-api/src/app.js';
+import { openOrdersDatabase } from '../../apps/orders-api/src/database.js';
 import { buildNbpMock } from '../../mocks/nbp/src/app.js';
+import { listen, ownDatabase, withResources } from '../helpers/resources.js';
 
-// Every test gets independent, in-memory SQLite stores and ephemeral loopback
-// listeners. No environment variables, developer volumes or live NBP defaults.
+// Independent in-memory stores and ephemeral loopback listeners for every test.
 export const test = base.extend<{ apis: { products: string; orders: string } }>({
-  apis: async ({}, use) => {
-    const apps: FastifyInstance[] = [];
-    async function listen(app: FastifyInstance) {
-      apps.push(app);
-      return app.listen({ host: '127.0.0.1', port: 0 });
-    }
-    try {
-      const products = await listen(buildProducts());
-      const nbp = await listen(buildNbpMock());
-      const orders = await listen(buildOrders({ products: { baseUrl: products }, nbp: { baseUrl: nbp } }));
-      await use({ products, orders });
-    } finally {
-      for (const app of apps.reverse()) await app.close();
-    }
-  },
+  apis: async ({}, use) => withResources(async (resources) => {
+    const productsDatabase = ownDatabase(resources, openProductsDatabase(':memory:'));
+    const products = await listen(resources, buildProducts({ database: productsDatabase }), 'Products contract API');
+    const nbp = await listen(resources, buildNbpMock(), 'Contract NBP mock');
+    const database = ownDatabase(resources, openOrdersDatabase(':memory:'));
+    const orders = await listen(resources, buildOrders({ database, products: { baseUrl: products }, nbp: { baseUrl: nbp } }), 'Orders contract API');
+    await use({ products, orders });
+  }),
 });

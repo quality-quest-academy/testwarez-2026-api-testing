@@ -79,20 +79,22 @@ idempotency records.
 
 ## Products test data reset
 
-KAN-6 exposes `openProductsDatabase(filename)` for the next endpoint slice. An
+`openProductsDatabase(filename)` initializes the Products store. An
 empty SQLite file is initialized and seeded automatically; reopening an existing
 file never duplicates the seed. To reset a local Products database, stop every
 process using it, delete that database file and its optional `-wal`/`-shm` files,
-then open it again. For example, if KAN-7 uses `products.db` in the repository
-root on PowerShell:
+then open it again. For example, for an explicitly configured `products.db` in
+the repository root on PowerShell:
 
 ```powershell
 Remove-Item products.db, products.db-wal, products.db-shm -Force -ErrorAction SilentlyContinue
 ```
 
-The service/Compose database location is deliberately deferred to the tickets
-that add that configuration. Do not delete a data volume unless a full reset is
-intended.
+Compose uses `/data/products.db` in its Products-only volume. Do not delete a
+data volume unless a full reset is intended. Newly created stores also reject
+fractional stock/version values at the SQLite boundary. Existing stores are not
+silently migrated or reset by this change; intentionally recreate disposable
+demo data using the reset procedure above to get the updated constraints.
 
 ## Orders persistence and configuration
 
@@ -250,6 +252,9 @@ Schemathesis-generated tests are a separate required CLI stage;
 schema checks do not replace business assertions, implement consumer-driven
 contracts or prove compatibility with the real NBP provider.
 See [contract checks](docs/contract-testing.md) and [decisions](docs/decisions.md).
+See [the KAN-18 test-quality audit](docs/test-quality-audit.md) for fixture
+ownership, the small browser page object, implemented improvements and pending
+follow-ups, with local validation evidence.
 
 ## Non-goals and safety
 

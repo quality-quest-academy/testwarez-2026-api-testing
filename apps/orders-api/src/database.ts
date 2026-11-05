@@ -26,18 +26,23 @@ export class OrdersDatabase {
 
   constructor(filename: string) {
     this.connection = new DatabaseSync(filename);
-    this.connection.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE IF NOT EXISTS orders (
-        id TEXT PRIMARY KEY,
-        snapshot TEXT NOT NULL CHECK (json_valid(snapshot))
-      );
-      CREATE TABLE IF NOT EXISTS idempotency_records (
-        key TEXT PRIMARY KEY NOT NULL,
-        fingerprint TEXT NOT NULL,
-        order_id TEXT NOT NULL UNIQUE REFERENCES orders(id)
-      );
-    `);
+    try {
+      this.connection.exec(`
+        PRAGMA foreign_keys = ON;
+        CREATE TABLE IF NOT EXISTS orders (
+          id TEXT PRIMARY KEY,
+          snapshot TEXT NOT NULL CHECK (json_valid(snapshot))
+        );
+        CREATE TABLE IF NOT EXISTS idempotency_records (
+          key TEXT PRIMARY KEY NOT NULL,
+          fingerprint TEXT NOT NULL,
+          order_id TEXT NOT NULL UNIQUE REFERENCES orders(id)
+        );
+      `);
+    } catch (error) {
+      this.connection.close();
+      throw error;
+    }
   }
 
   close() { this.connection.close(); }

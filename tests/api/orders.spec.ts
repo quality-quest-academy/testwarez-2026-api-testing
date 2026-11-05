@@ -1,10 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import Fastify, { type FastifyReply } from 'fastify';
-import { expect, test as base } from '@playwright/test';
-import { buildApp } from '../../apps/orders-api/src/app.js';
-import { openOrdersDatabase, type Order } from '../../apps/orders-api/src/database.js';
+import { expect } from '@playwright/test';
+import type { Order } from '../../apps/orders-api/src/database.js';
+import { expectStoredCounts } from '../helpers/orders-assertions.js';
+import { test } from './fixtures/orders.js';
 
 const cart = {
   items: [
@@ -13,91 +10,6 @@ const cart = {
   ],
 };
 const headers = { 'Idempotency-Key': 'checkout-attempt-0001' };
-
-type FailureMode = 'success' | 'unavailable' | 'invalid' | 'invalid-json' | 'disconnect' | 'timeout' | 'timeout-body';
-
-function sendFailure(mode: FailureMode, reply: FastifyReply): boolean {
-  switch (mode) {
-    case 'success': return false;
-    case 'unavailable': reply.status(503).send({ message: 'Unavailable' }); break;
-    case 'invalid': reply.send({ unexpected: 'data' }); break;
-    case 'invalid-json': reply.type('application/json').send('{'); break;
-    case 'disconnect': reply.hijack(); reply.raw.destroy(); break;
-    case 'timeout': reply.hijack(); break;
-    case 'timeout-body':
-      reply.hijack();
-      reply.raw.writeHead(200, { 'content-type': 'application/json' });
-      reply.raw.write('{'); // Never finish: the client must abort body consumption.
-      break;
-  }
-  return true;
-}
-
-function expectStoredCounts(database: ReturnType<typeof openOrdersDatabase>, count: number) {
-  expect(database.connection.prepare('SELECT count(*) AS count FROM orders').get()).toEqual({ count });
-  expect(database.connection.prepare('SELECT count(*) AS count FROM idempotency_records').get()).toEqual({ count });
-}
-
-async function startOrdersApi() {
-  const directory = await mkdtemp(join(tmpdir(), 'testwarez-orders-api-'));
-  const filename = join(directory, 'orders.db');
-  const database = openOrdersDatabase(filename);
-  const products = Fastify();
-  const nbp = Fastify();
-  const state = {
-    productsCalls: 0,
-    nbpCalls: 0,
-    requestedOfferIds: [] as string[],
-    productsMode: 'success' as FailureMode,
-    nbpMode: 'success' as FailureMode,
-    productsNotFound: undefined as { code: string; offerIds: string[] } | undefined,
-    mid: 4.3,
-    offers: [
-      { id: 'offer-101', productId: 'prod-001', productName: 'Demo keyboard', supplierId: 'supplier-alpha', supplierName: 'Alpha', price: '89.00', currency: 'EUR', stock: 8, version: 3 },
-      { id: 'offer-205', productId: 'prod-002', productName: 'Demo mouse', supplierId: 'supplier-gamma', supplierName: 'Gamma', price: '35.00', currency: 'EUR', stock: 12, version: 2 },
-    ],
-  };
-  products.post<{ Body: { offerIds: string[] } }>('/offers/resolve', (request, reply) => {
-    state.productsCalls++;
-    state.requestedOfferIds = request.body.offerIds;
-    if (sendFailure(state.productsMode, reply)) return reply;
-    if (state.productsNotFound !== undefined) {
-      return reply.status(404).send({ message: 'Invalid missing-offer response', ...state.productsNotFound });
-    }
-    const missing = request.body.offerIds.filter((id) => !state.offers.some((offer) => offer.id === id));
-    if (missing.length > 0) {
-      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Requested offers do not exist', offerIds: missing });
-    }
-    return request.body.offerIds.map((id) => state.offers.find((offer) => offer.id === id));
-  });
-  nbp.get('/api/exchangerates/rates/a/eur/', (_request, reply) => {
-    state.nbpCalls++;
-    if (sendFailure(state.nbpMode, reply)) return reply;
-    return { table: 'A', currency: 'euro', code: 'EUR', rates: [{ no: 'DEMO/2026', effectiveDate: '2026-10-21', mid: state.mid }] };
-  });
-  const app = buildApp({
-    database,
-    products: { baseUrl: await products.listen({ host: '127.0.0.1', port: 0 }), timeoutMs: 200 },
-    nbp: { baseUrl: await nbp.listen({ host: '127.0.0.1', port: 0 }), timeoutMs: 200 },
-  });
-  return {
-    app, state, database, filename,
-    address: await app.listen({ host: '127.0.0.1', port: 0 }),
-    async close() {
-      await app.close();
-      await products.close();
-      await nbp.close();
-      await rm(directory, { recursive: true, force: true });
-    },
-  };
-}
-
-const test = base.extend<{ api: Awaited<ReturnType<typeof startOrdersApi>> }>({
-  api: async ({}, use) => {
-    const api = await startOrdersApi();
-    try { await use(api); } finally { await api.close(); }
-  },
-});
 
 test('creates a multi-item order with one batch lookup and one NBP rate', async ({ request, api }) => {
   const response = await request.post(`${api.address}/orders`, { headers, data: cart });
@@ -134,17 +46,10 @@ test('history survives changed dependencies and reopening the private SQLite fil
   expect(api.state.productsCalls).toBe(1);
   expect(api.state.nbpCalls).toBe(1);
 
-  await api.app.close();
-  const restarted = buildApp({
-    database: openOrdersDatabase(api.filename),
-    products: { baseUrl: 'http://127.0.0.1:1' }, nbp: { baseUrl: 'http://127.0.0.1:1' },
-  });
-  try {
-    const address = await restarted.listen({ host: '127.0.0.1', port: 0 });
-    const persisted = await request.get(`${address}/orders/${original.id}`);
-    expect(persisted.status()).toBe(200);
-    expect(await persisted.json()).toEqual(original);
-  } finally { await restarted.close(); }
+  const restarted = await api.restart();
+  const persisted = await request.get(`${restarted.address}/orders/${original.id}`);
+  expect(persisted.status()).toBe(200);
+  expect(await persisted.json()).toEqual(original);
 });
 
 test('returns the documented 404 for unknown orders without dependency calls', async ({ request, api }) => {
@@ -213,36 +118,43 @@ for (const unavailable of ['insufficient stock', 'zero stock', 'missing offer'] 
   });
 }
 
-test('rejects invalid carts and keys before calling dependencies or writing orders', async ({ request, api }) => {
-  const invalidBodies = [
-    { items: [] },
-    { items: Array.from({ length: 31 }, (_, i) => ({ ...cart.items[0], offerId: `offer-${i}` })) },
-    { items: [cart.items[0], { ...cart.items[0], quantity: 1 }] },
-    ...[0, 101, 1.5, '2'].map((quantity) => ({ items: [{ ...cart.items[0], quantity }] })),
-    ...[89, '89.0', '-1.00'].map((expectedUnitPrice) => ({ items: [{ ...cart.items[0], expectedUnitPrice }] })),
-    { items: [{ ...cart.items[0], expectedOfferVersion: 0 }] },
-    { items: [{ ...cart.items[0], offerId: '' }] },
-    { items: [{ ...cart.items[0], total: '0.01' }] },
-    { items: cart.items, total: '0.01' },
-  ];
-  for (const data of invalidBodies) {
+for (const [description, data] of [
+  ['empty cart', { items: [] }],
+  ['more than 30 items', { items: Array.from({ length: 31 }, (_, i) => ({ ...cart.items[0], offerId: `offer-${i}` })) }],
+  ['duplicate offer IDs', { items: [cart.items[0], { ...cart.items[0], quantity: 1 }] }],
+  ...[0, 101, 1.5, '2'].map((quantity) => [`quantity ${JSON.stringify(quantity)}`, { items: [{ ...cart.items[0], quantity }] }] as const),
+  ...[89, '89.0', '-1.00'].map((expectedUnitPrice) => [`price ${JSON.stringify(expectedUnitPrice)}`, { items: [{ ...cart.items[0], expectedUnitPrice }] }] as const),
+  ['zero offer version', { items: [{ ...cart.items[0], expectedOfferVersion: 0 }] }],
+  ['empty offer ID', { items: [{ ...cart.items[0], offerId: '' }] }],
+  ['client-supplied item total', { items: [{ ...cart.items[0], total: '0.01' }] }],
+  ['client-supplied order total', { items: cart.items, total: '0.01' }],
+] as const) {
+  test(`rejects ${description} before dependency calls or writes, then allows a corrected cart`, async ({ request, api }) => {
     const response = await request.post(`${api.address}/orders`, { headers, data });
-    expect(response.status(), JSON.stringify(data)).toBe(400);
+    expect(response.status()).toBe(400);
     expect(await response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
-  }
-  for (const key of [undefined, 'short', 'x'.repeat(129)]) {
+    expect(api.state.productsCalls).toBe(0);
+    expect(api.state.nbpCalls).toBe(0);
+    expectStoredCounts(api.database, 0);
+
+    const retry = await request.post(`${api.address}/orders`, { headers, data: cart });
+    expect(retry.status()).toBe(201);
+    expectStoredCounts(api.database, 1);
+  });
+}
+
+for (const [description, key] of [['missing', undefined], ['short', 'short'], ['overlong', 'x'.repeat(129)]] as const) {
+  test(`rejects a ${description} idempotency key before dependency calls or writes`, async ({ request, api }) => {
     const response = await request.post(`${api.address}/orders`, {
       headers: key === undefined ? {} : { 'Idempotency-Key': key }, data: cart,
     });
     expect(response.status()).toBe(400);
-  }
-  expect(api.state.productsCalls).toBe(0);
-  expect(api.state.nbpCalls).toBe(0);
-  expectStoredCounts(api.database, 0);
-  const retry = await request.post(`${api.address}/orders`, { headers, data: cart });
-  expect(retry.status()).toBe(201);
-  expectStoredCounts(api.database, 1);
-});
+    expect(await response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(api.state.productsCalls).toBe(0);
+    expect(api.state.nbpCalls).toBe(0);
+    expectStoredCounts(api.database, 0);
+  });
+}
 
 for (const dependency of ['products', 'nbp'] as const) {
   for (const mode of ['unavailable', 'invalid', 'invalid-json', 'disconnect', 'timeout', 'timeout-body'] as const) {
@@ -358,21 +270,13 @@ test('validates malformed retries before consulting a successful key', async ({ 
 test('successful-key replay and changed-payload rejection survive a restart with unreachable dependencies', async ({ request, api }) => {
   const original = await request.post(`${api.address}/orders`, { headers, data: cart });
   expect(original.status()).toBe(201);
-  await api.app.close();
-  const database = openOrdersDatabase(api.filename);
-  const restarted = buildApp({
-    database,
-    products: { baseUrl: 'http://127.0.0.1:1' }, nbp: { baseUrl: 'http://127.0.0.1:1' },
-  });
-  try {
-    const address = await restarted.listen({ host: '127.0.0.1', port: 0 });
-    const replay = await request.post(`${address}/orders`, { headers, data: cart });
-    expect(replay.status()).toBe(201);
-    expect(replay.headers().location).toBe(original.headers().location);
-    expect(await replay.text()).toBe(await original.text());
-    const changed = await request.post(`${address}/orders`, { headers, data: { items: [cart.items[0]] } });
-    expect(changed.status()).toBe(409);
-    expect(await changed.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
-    expectStoredCounts(database, 1);
-  } finally { await restarted.close(); }
+  const restarted = await api.restart();
+  const replay = await request.post(`${restarted.address}/orders`, { headers, data: cart });
+  expect(replay.status()).toBe(201);
+  expect(replay.headers().location).toBe(original.headers().location);
+  expect(await replay.text()).toBe(await original.text());
+  const changed = await request.post(`${restarted.address}/orders`, { headers, data: { items: [cart.items[0]] } });
+  expect(changed.status()).toBe(409);
+  expect(await changed.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+  expectStoredCounts(restarted.database, 1);
 });

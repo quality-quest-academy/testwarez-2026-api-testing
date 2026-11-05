@@ -116,12 +116,3 @@ Scan the exported slide from a second device, confirm the exact destination and
 check intended attendee access before distributing it. Only the owner decides
 repository visibility; publication is not required to finish these materials.
 Code and documentation use the existing [MIT license](../LICENSE).
-
-### Ready-to-present checklist
-
-- [ ] Reproduce Bruno 01–12 against fresh disposable data and clean up afterward.
-- [ ] Run the full local gate and review current PR checks, not historical counts.
-- [ ] Keep local excerpts/source/slides available; no live NBP or on-stage execution required.
-- [ ] Explain each example's real/doubled components and what it cannot prove.
-- [ ] Verify the link/QR and remove private tracker references from shared materials.
-- [ ] End with the [test-strategy checklist](test-strategy.md#strategy-checklist), not a tool-shopping list.

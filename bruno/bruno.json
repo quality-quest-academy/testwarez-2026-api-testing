@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "TestWarez API exploration",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

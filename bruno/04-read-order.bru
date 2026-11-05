@@ -1,0 +1,18 @@
+meta {
+  name: 04 Read stored snapshot
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{ordersUrl}}/orders/{{orderId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test('History is the created snapshot', function () {
+    expect(res.status).to.equal(200);
+    expect(res.body).to.deep.equal(JSON.parse(bru.getVar('orderSnapshot')));
+  });
+}

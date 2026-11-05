@@ -1,0 +1,28 @@
+meta {
+  name: 12 Invalid quantity
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{ordersUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: bruno-invalid-0001
+}
+
+body:json {
+  { "items": [{ "offerId": "offer-101", "quantity": 0,
+    "expectedUnitPrice": "90.00", "expectedOfferVersion": 4 }] }
+}
+
+tests {
+  test('Invalid quantity is validation, not a stock conflict', function () {
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal('VALIDATION_ERROR');
+  });
+}

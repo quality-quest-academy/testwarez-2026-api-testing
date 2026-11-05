@@ -1,0 +1,28 @@
+meta {
+  name: 05 Replay same successful checkout
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{ordersUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: {{checkoutKey}}
+}
+
+body:json {
+  {{acceptedCart}}
+}
+
+tests {
+  test('Sequential replay returns the original body and Location', function () {
+    expect(res.status).to.equal(201);
+    expect(res.body).to.deep.equal(JSON.parse(bru.getVar('orderSnapshot')));
+    expect(res.headers.location).to.equal(bru.getVar('orderLocation'));
+  });
+}

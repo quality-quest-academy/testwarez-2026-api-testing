@@ -1,0 +1,2 @@
+# Preserve PDF bytes and avoid rendering slide decks as text diffs.
+*.pdf binary

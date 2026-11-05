@@ -1,339 +1,57 @@
-# Bootstrap decisions (KAN-5)
+# Technical decisions
 
-## Runtime and workspace
+## What
 
-- **Node.js 24 LTS, TypeScript, Fastify 5, ESM, npm workspaces.** Node 24.11.1 and
-  npm 11.6.2 are the reproducible baseline; use `npm ci` and the committed lockfile.
-  npm avoids another package-manager prerequisite. Strict shared TypeScript
-  settings use NodeNext resolution; each service remains a separate package.
-- App factories return independent Fastify instances without opening sockets or
-  reading environment variables on import. There is intentionally no route,
-  persistence initialization or server entrypoint yet. Later tickets add those
-  concerns without coupling services through a shared business/data package.
-- **Persistence choice for KAN-6/KAN-9: built-in `node:sqlite` `DatabaseSync`,
-  explicit SQL, no ORM.** It avoids native npm addons and suits a small SQLite
-  demo. This API is experimental in the pinned Node baseline; accept that tradeoff
-  for this educational repository and pin the runtime. Each service owns its own
-  schema, connection and file; tests must use fresh, isolated databases.
-- **Money arithmetic choice: `decimal.js`**, to be installed when calculations
-  arrive, not as an unused bootstrap dependency. Never compute money with binary
-  floating point. Round the final PLN total half-up to two decimals.
+This lab favors readable boundaries and repeatable examples over framework size.
+These are current decisions, not an implementation changelog.
 
-## Runner split (owner-confirmed)
+## Why
 
-| Level | Runner | Reason |
-| --- | --- | --- |
-| Unit, including schema-tooling units | Vitest only | Fast direct function/schema checks; no HTTP service under test |
-| Isolated API | Playwright Test + `APIRequestContext` | Real HTTP requests and readable assertions; no browser installation needed |
-| Backend integration | Playwright Test + `APIRequestContext` | Same HTTP tooling against real Products/Orders with mock NBP |
-| Generated OpenAPI testing | Schemathesis CLI (KAN-12) | Required complementary property-based API testing |
-| One browser E2E | Playwright Test (KAN-14) | Browser UI flow with controlled downstream dependencies |
+| Choice | Reason and tradeoff |
+| --- | --- |
+| Node 24.11.1 / npm 11.6.2, TypeScript, Fastify 5, ESM workspaces | One small application stack and a committed lockfile; strict NodeNext typing |
+| Separate app factories and server entrypoints | Imports do not open sockets or load environment files; tests inject their own stores and URLs |
+| Built-in `node:sqlite`, explicit SQL, no ORM | No native npm addon or extra database server; `DatabaseSync` is experimental in the pinned runtime |
+| One database per service | Products owns catalog data; Orders gets offers only over HTTP, never through shared database access |
+| Orders snapshot as JSON in one row | History needs immutable whole-order reads, not item-table queries; snapshot and successful-key inserts share a transaction |
+| `decimal.js`, decimal strings on the wire | Exact money arithmetic; convert the combined subtotal once and round PLN half-up to two decimals |
+| Vite + Vanilla TypeScript, `sessionStorage` | Small UI without a component framework; same-tab recovery, not durable or trusted cart storage |
+| Direct browser indicative FX | Distinguishes indication from authoritative Orders pricing; depends on provider CORS when using live NBP |
+| Local Fastify HTTP doubles | Exercise real dependency adapters without another mocking library; mock compatibility is not live-provider proof |
+| Vitest units; Playwright HTTP/browser tests | Fast pure tests plus one consistent HTTP/assertion API; API tests never belong in Vitest |
+| Separate Schemathesis CLI | Generated OpenAPI conformance complements explicit business tests; bounded generation is not exhaustive testing |
+| Bruno for exploration | Versioned, readable requests with light checks; not a replacement for the automated regression strategy |
+| GitHub Actions and disposable Compose stacks | Test container wiring without hosted previews, Testcontainers or Kubernetes |
+| Zero blanket retries | Failures remain visible; isolation and bounded readiness address causes rather than conceal symptoms |
 
-API tests must not be added to Vitest. Current API smoke tests start a fresh app
-on a loopback ephemeral port per test and close it in `finally`; `/health` returns
-404 deliberately until routes are implemented. They prove bootability and HTTP
-reachability, **not** the promised health contract or business behavior. Update
-these assertions when endpoint implementation lands.
+### Contract details worth preserving
 
-Use Playwright's built-in assertions for API/browser tests and Vitest assertions
-for units; no separate assertion library. Zero blanket retries. Future stateful
-tests may run in parallel only with separate databases/stacks.
+- Both authored contracts use **OpenAPI 3.0.3**. Redocly uses recommended-strict
+  rules with explicit exceptions for this unauthenticated local demo.
+- `ConflictError` is a `oneOf` of complete closed schemas. This avoids a closed
+  `allOf` base accidentally rejecting legitimate `changes` details.
+- Resolved offers include `productName`, so Orders needs no extra catalog lookup.
+  Batch resolution preserves request order and returns no partial success.
+- OpenAPI `uniqueItems` cannot enforce unique `offerId` fields across different
+  objects; Orders additionally enforces this in code.
+- Swagger Parser + Ajv draft-04/formats support the schema subset used here, not
+  every OpenAPI-only keyword. New semantics such as `nullable` need review.
 
-## HTTP test doubles
+### Deliberately small scope
 
-Use small local Fastify HTTP stub servers for isolated outbound dependency tests,
-with injected base URLs and deterministic responses/timeouts. This exercises the
-real HTTP adapter with no additional mocking library. The reusable NBP HTTP mock
-is KAN-8 work; no mock service exists yet. Browser routing/mocking must not conceal
-Orders' own NBP calls: integration/E2E will use a configurable mock base URL.
-Real-NBP compatibility is a separate optional, non-blocking check.
+Sequential idempotency fingerprints validated request fields in a fixed property
+order; item-array order matters. Successful keys persist with the snapshot.
+Failed attempts retain no successful key. No in-flight coordination, expiry or
+high-concurrency guarantee is implemented. See [checkout rules](architecture.md).
 
-## Contracts and validation
+No payment, authentication, reservation/decrement, supplier network services,
+distributed transactions, Pact, hosted preview or broad UI regression framework
+is included. Live-NBP smoke remains optional and unimplemented.
 
-- Both specs are authored as OpenAPI 3.0.3. Redocly's recommended-strict rules validate
-  references, structure and examples. Localhost URLs, deliberately unauthenticated
-  local APIs and operations without client-input 4xx responses have documented
-  rule exceptions in `redocly.yaml`; remaining recommended rules are errors.
-- Swagger Parser validates and dereferences the documents. Ajv draft-04 plus
-  formats validates authored request/response/schema/parameter examples and
-  selected invalid values in Vitest. This small checker supports the JSON Schema
-  subset currently used; it is **not** a general OpenAPI response validator.
-  Revisit it if adding OpenAPI-only validation keywords. Runtime/generated
-  contract tests remain KAN-12, not something this bootstrap claims to deliver.
-- `ConflictError` uses `oneOf` over three complete closed object schemas. Valid
-  `OFFER_CHANGED` errors require `changes`, including expected/current price and
-  version. Regression units prove this property is accepted and malformed details
-  are rejected; there is no unsafe closed-base `allOf` composition.
-- The conceptual baseline leaves response envelopes/error details open. Batch
-  resolution returns an array in request order or `404 NOT_FOUND` with missing
-  `offerIds`. All Offer representations include `productName` so Orders can make
-  the required historical snapshot without an extra Products lookup. Products
-  still owns that name; Orders receives it over HTTP. Local validation errors use
-  `VALIDATION_ERROR`. Unavailable checkout errors list affected `offerIds`.
-- OpenAPI 3.0 `uniqueItems` cannot enforce uniqueness of one field across
-  different objects. Checkout must additionally reject repeated `offerId` values
-  in code, even if quantities/expectations differ. This is explicitly described
-  in the schema; generated validation alone cannot prove it.
-- EUR/PLN money is a nonnegative string with exactly two decimals; the positive
-  FX rate is a string with four decimals. Numeric money, negative stock, absent
-  required fields and malformed conflict details are rejected by unit checks.
-- Successful sequential idempotency replay preserves the original 201 response
-  and Location without new dependency calls. Failed attempts leave no successful
-  key record. Atomic persistence is implemented in KAN-10; high-concurrency guarantees,
-  in-flight coordination and key TTL are not promised.
+## How to run
 
-## Products persistence and seed (KAN-6)
-
-- `apps/products-api/src/database.ts` owns the Products SQLite schema and its
-  deterministic seed. It uses `products`, `suppliers`, and `offers` tables with
-  foreign keys and database checks for EUR, nonnegative stock and positive
-  versions.
-- `openProductsDatabase(filename)` initializes an empty file and runs the
-  idempotent seed on every open. Stable seed IDs prevent duplicates after a
-  restart. `prod-001` has offers from Alpha and Beta, including Beta's
-  unavailable (`stock: 0`) offer.
-- This ticket deliberately adds no routes, listener, default data-file location
-  or environment configuration. KAN-7 will consume this service-owned data
-  layer; KAN-11 will choose the container data path and volume.
-
-## Products endpoints (KAN-7)
-
-- `buildApp` accepts an optional service-owned `ProductsDatabase`; when omitted,
-  it creates a seeded in-memory SQLite database. The application closes that
-  database with its Fastify instance. This keeps imports free of environment
-  configuration and lets isolated API tests provide a distinct temporary file.
-- Products routes map their public HTTP data to joined product/supplier/offer
-  records. Batch resolution preserves caller order and returns no partial result
-  when one or more offer IDs are missing. PATCH increments the offer version once
-  only when price or stock actually changes.
-- Fastify route schemas enforce the OpenAPI request constraints. Validation
-  failures use the contract's `VALIDATION_ERROR` response shape.
-
-## NBP adapter and mock (KAN-8)
-
-- `NbpClient` is an Orders-owned HTTP boundary. Its base URL is injected rather
-  than read from the environment, defaulting to the real `https://api.nbp.pl`.
-  KAN-9 can inject configuration at its service composition point; standard tests
-  inject the local mock URL and never call the live provider.
-- The adapter requests NBP's last-published table-A EUR endpoint, validates the
-  response shape it needs, and returns a four-decimal rate string and effective
-  date. It distinguishes timeout, unavailable upstream and invalid upstream data
-  for a future Orders route to map to `DEPENDENCY_UNAVAILABLE`.
-- `mocks/nbp` is a small Fastify workspace with the illustrative NBP fixture. Its
-  success, delayed-response and 503 modes deliberately exercise the real adapter
-  over HTTP. Compose wiring and a live-NBP compatibility smoke remain later work.
-
-## Orders checkout and snapshots (KAN-9)
-
-- Orders owns a separate `node:sqlite` database. `openOrdersDatabase(filename)`
-  creates an empty store or reopens existing history. `buildApp` defaults to an
-  in-memory store and closes the supplied store on shutdown, like Products.
-- One `orders` row stores an entire JSON snapshot, including ordered line items.
-  A single SQLite INSERT is atomic for the complete cart; no partially written
-  order/items are possible. There is no update route. Historical GET only reads
-  this snapshot and never resolves current offers or FX. Separate item tables
-  would add joins without a query requirement in this small demo.
-- `ProductsClient` is Orders-owned, with no imports from Products persistence.
-  One HTTP batch call resolves all requested IDs in order. The adapter validates
-  the fields used at checkout and rejects unusable responses. Products and NBP
-  URLs/timeouts are injected through app options, not read on import.
-- `decimal.js` now implements exact line/subtotal arithmetic and final PLN
-  half-up rounding. Precision scales with input size because the Money contract
-  does not bound the number of integer digits. Do not round converted lines;
-  convert the combined EUR subtotal once with one NBP rate.
-- Request validation rejects coercion, extra body fields and duplicate offer IDs.
-  Minimal stale-price/version and availability guards prevent accepting an
-  unsafe cart in this increment. Dependency errors map to 503; the full conflict,
-  failure/no-partial-write coverage remains KAN-10.
-- **Idempotency is not implemented by KAN-9.** The required header is validated,
-  but repeats can create duplicates. KAN-10 must persist successful-key records
-  atomically with order creation and demonstrate all three sequential behaviors.
-  The existing contract documents that target; it does not prove it exists yet.
-- Playwright tests use temporary Orders files and local Products/NBP HTTP stubs.
-  They demonstrate totals, final-only rounding, input rejection, immutable history
-  after dependency changes, and history after reopening the database with
-  unreachable dependency URLs. They are not real-Products integration tests.
-
-## Orders conflicts, failures and sequential retries (KAN-10)
-
-- `idempotency_records` stores a unique key, SHA-256 request fingerprint and a
-  foreign key to the immutable order snapshot. Both INSERTs use one explicit
-  SQLite transaction; a failed key write rolls back the order. Existing Orders
-  files gain the table on open without rewriting their history. Pre-KAN-10 orders
-  have no retained keys and cannot retroactively support replay.
-- Fingerprints serialize validated request fields in a fixed object-property
-  order. JSON whitespace/property order do not change identity; item array order
-  does. This preserves the ordered response items without a generic JSON
-  canonicalization dependency. Price, version, quantity and offer ID all matter.
-- Validate requests (including duplicate offer IDs) before key lookup. A successful
-  key is checked before either HTTP dependency: identical payload replays the
-  stored order with 201 and its original Location; changed payload returns
-  `409 IDEMPOTENCY_KEY_REUSED`. Failed validation, conflicts and dependency errors
-  retain no successful record. A different key creates a fresh checkout.
-- Existing offer guards now have explicit Playwright coverage for stale price,
-  stale version, insufficient/zero stock and Products 404 mapped to
-  `409 OFFER_UNAVAILABLE`. Reject the whole cart and skip FX for these conflicts;
-  changed offers include expected/current values for reconfirmation.
-- Products/NBP failures (HTTP errors, unusable data, invalid JSON, disconnected
-  connections and timeouts) return 503 with neither order nor key persisted.
-  HTTP timeouts cover body consumption, not just receipt of headers. Tests use
-  controlled unfinished responses, not sleeps, for both timeout phases.
-- Playwright proves sequential replay, payload conflicts, retry after failure,
-  distinct keys and restart persistence using isolated SQLite and HTTP stubs.
-  Vitest persistence units inject a key-write failure to prove rollback and retry.
-  This is not cross-service integration or a high-concurrency demonstration.
-- No in-flight duplicate coordination, key TTL/cleanup or high-concurrency
-  guarantees are implemented. A database uniqueness constraint prevents retained
-  duplicate keys, but concurrent requests are not promised a replay/conflict
-  protocol. Stock validation remains neither reservation nor decrement.
-
-## Docker Compose and persistence (KAN-11)
-
-- `compose.yaml` builds the three backend processes from the shared root
-  `Dockerfile`. The image compiles only the selected workspace and starts its
-  explicit Fastify listener; app factories remain usable without environment
-  configuration in isolated tests.
-- `products-data` mounts only at `/data` in Products and stores
-  `/data/products.db`. `orders-data` mounts only at `/data` in Orders and stores
-  `/data/orders.db`. Neither service mounts or reads the other service's file.
-  Products retains its idempotent seed on startup; Orders starts empty.
-- Orders receives the Products and NBP base URLs through Compose environment
-  variables and communicates with both over HTTP service names. The Compose NBP
-  mock supplies the deterministic fixture rather than the live provider.
-- All three services have Compose health checks. Orders starts after the two
-  dependencies are healthy, while its request-time dependency error handling
-  remains responsible for failures after startup. Named volumes persist across
-  `docker compose down`; `docker compose down -v` is the explicit destructive
-  reset documented in the README.
-
-## Generated and targeted contract checks (KAN-12)
-
-- `npm run test:contract` uses Playwright for private HTTP fixture lifecycle and
-  assertions, and invokes the separate **Schemathesis 4.32.7 CLI** via `uvx` with
-  Python 3.12. This reuses the approved runner without adding a Python application
-  workspace or requiring Docker for local contract checks.
-- Every test gets fresh in-memory Products/Orders SQLite stores, ephemeral
-  listeners and the NBP HTTP mock. Schemathesis selects all eight operations from
-  the original specs, runs examples + positive/negative fuzzing with seed 2026,
-  one worker and 20 fuzzing examples per operation, and checks HTTP status,
-  content type, headers, response schemas and absence of server errors. No retries,
-  coverage/stateful phase, persisted generation database/cache or adaptive schema
-  changes. Dictionary hints and a seeded Orders history ID reach meaningful data
-  without narrowing the contract. These checks are not exhaustive fuzz testing.
-- Generated negative requests exposed Products' default malformed-JSON error
-  envelope. Products now maps parser-level 400 errors to its documented validation
-  shape, with an isolated Playwright regression for POST/PATCH. The contract was
-  not relaxed to hide the mismatch.
-- Targeted Playwright examples validate actual HTTP bodies, then reject modified
-  copies with numeric money, string stock, missing fields and forbidden null.
-  The helper uses the existing Ajv/Swagger Parser dependencies and supports only
-  the current schema subset; Schemathesis provides HTTP-level generated checking.
-- `npm run check` includes the Python-free targeted examples. The complete gate
-  additionally requires `npm run test:contract` (initial uv/Python/tool downloads
-  need internet). CLI logs, JUnit and HAR artifacts make failures inspectable.
-  Required GitHub Actions wiring is documented under KAN-15 below. See
-  [contract-testing.md](contract-testing.md) for limits and the distinction between
-  schema conformance, business assertions and consumer-driven contracts.
-
-## Backend integration tests (KAN-13)
-
-- `npm run test:integration` uses a separate Playwright config so isolated API,
-  contract and business integration checks remain independently selectable.
-  `npm test` and `npm run check` include the integration suite; no new dependency,
-  Docker or browser binary is needed for this local feedback loop.
-- Each test starts the real Products and Orders app factories on ephemeral
-  loopback listeners, with two distinct SQLite files in a unique temporary
-  directory. Products initializes its own deterministic seed; Orders starts
-  empty. Both HTTP client URLs are explicitly injected, with NBP pointing only
-  at the existing fixture-backed HTTP mock. No service sees the other's store.
-- Setup/reset is test-scoped, not shared across workers or scenarios. Teardown
-  attempts all listener/database closures and removes the private files even
-  after an assertion/setup failure. Parallel tests reuse the same offer IDs and
-  idempotency key safely because their mutable state is independent. No sleeps,
-  blanket retries, public NBP, `.env` loading or developer volumes.
-- Business scenarios build a cart from the HTTP catalog and verify the complete
-  multi-item order, exact fixture total, Location and stored-history retrieval.
-  Two conflict variants mutate the second offer through Products PATCH: a new
-  price/version and a stock-only version increment. Orders must reject stale
-  expectations with reconfirmation details, skip NBP and persist neither an
-  order nor a successful key. Re-fetching and explicitly accepting the new
-  expectations allows a corrected retry with the same failed key.
-- Lightweight observation hooks count real batch-resolution/FX requests without
-  replacing routes or responses. Test-only reads of Orders' own database prove
-  no partial writes; application code remains independent of the other store.
-- This suite demonstrates real HTTP service integration and business behavior,
-  not container startup, a browser journey, high-concurrency idempotency or
-  live-provider compatibility. Compose-based ephemeral CI execution is a separate
-  KAN-15 gate; browser E2E is documented under KAN-14 below.
-
-## Minimal frontend and browser tooling (KAN-14)
-
-- Vite 8.3.5 + Vanilla TypeScript, no framework, and `sessionStorage` for the
-  multi-item cart and uncertain checkout attempts. Keep offer price/version
-  expectations until explicit acceptance after conflict refresh. Acceptance
-  and submission are separate actions; never auto-retry a revised cart.
-- Use `decimal.js` for indicative display only. Orders receives only offer IDs,
-  quantities, expected price/version and an idempotency key; it alone decides
-  the final amount. Network/5xx failures retain the exact attempt/key and lock
-  edits until resolved, including after reload. No concurrency-hardening claims.
-- Local Vite dev/preview forwarding avoids business-API CORS changes. Browser FX
-  goes directly to the configurable NBP URL. Chromium read live NBP successfully
-  on 2026-11-01; no read-only indicative fallback was required. The mock permits
-  CORS on its read-only FX route. Live checks remain separate/non-blocking.
-- The frontend joins Compose with health/readiness dependencies; Vite preview
-  serves the lab, not a production deployment. FX is embedded at build time;
-  backend forwarding URLs are runtime process configuration. Vite dotenv loading
-  is disabled to avoid the root credentials file.
-- One Chromium test builds/serves private assets with real Products/Orders over
-  HTTP, separate temporary SQLite files and HTTP mock NBP. It covers reload,
-  explicit stale-offer review and confirmation without duplicating API-level
-  persistence/idempotency matrices. Pure cart transitions stay in Vitest. The
-  browser gate is included in `npm run check`, with zero retries and retained
-  failure traces/screenshots. Separate Compose CI orchestration is documented
-  under KAN-15 below.
-- Owner-approved extension: pinned project-local Playwright MCP 0.0.84, installed
-  Edge with an isolated profile, loopback origin guardrails, WebMCP disabled and
-  ignored artifacts. MCP was selected for the later interactive exploratory
-  workflow, not as a replacement for Playwright Test. The exploratory session
-  remains a separate initiative. See [frontend.md](frontend.md) for setup,
-  verified CORS behavior, safety boundaries and retry limitations.
-
-## Required hosted CI and disposable system tests (KAN-15)
-
-- Four stable required jobs: **Static**, **Isolated**, **Contracts**, **Compose
-  system**. GitHub Actions runs on PRs and pushes to main, on pinned Ubuntu 24.04
-  with pinned action revisions, read-only contents permission and no persisted
-  checkout credentials. No personal secrets, self-hosted runners, privileged
-  PR-target execution, paid reporting or preview hosting.
-- Keep Docker-free local fixtures and white-box database/dependency assertions.
-  Separate `tests/compose/` execution uses only public HTTP against published
-  container ports; missing explicit target configuration fails. Reuse the cart
-  reader and the single browser scenario, not a second browser journey.
-- Build explicitly tagged images once, then run three backend scenarios and the
-  browser serially in four fresh project/volume sets. Build-time browser FX uses
-  the host-accessible mock; runtime service URLs stay on the Compose network.
-  Always specify `.env.example`, never load the root credential-bearing `.env`.
-- Bounded health-driven readiness, zero retries, per-scenario diagnostics before
-  project-scoped teardown, verified resource removal and workflow fallback cleanup.
-  Expected-failure lifecycle probes continuously cover browser assertion failure
-  and partial startup (Orders exit 42), without suppressing normal test failures.
-- npm/uv download caches only initially; scoped JUnit, Schemathesis log/JUnit/HAR,
-  browser failure traces/screenshots and Compose diagnostics retained seven days.
-  No shared mutable state, public NBP, global Docker prune or database artifacts.
-- Enforce repository-level main rules after successful hosted checks: all four
-  GitHub Actions checks, up-to-date branch, PR required, zero approving reviews,
-  no force pushes/deletion or routine administrator bypass. No paid features.
-  Actual run evidence, timing measurements and rule verification belong in
-  [test-strategy.md](test-strategy.md), not an unverified completion claim.
-
-## Incremental delivery
-
-KAN-5 adds no functional endpoints (including health), SQLite files, frontend,
-Compose, provider mock, Bruno collection, generated Schemathesis execution or
-GitHub Actions. Static and test commands run locally now. Follow the local
-owner-controlled implementation plan and the selected Jira ticket, one ticket at
-a time. Keep that plan gitignored; do not publish it or copy its sensitive links.
-
-KAN-6/7 add Products data/routes; KAN-8 adds NBP integration and mock; KAN-9/10 add
-Orders behavior; KAN-11 adds Compose; KAN-12/13 add contract/integration tests;
-KAN-14 adds UI/E2E; KAN-15 adds CI; KAN-16 adds exploration and walkthrough docs.
+Use the [README quickstart](../README.md#run-the-demo),
+[test selections](test-strategy.md#how-to-run) and
+[contract commands](contract-testing.md#how-to-run).
+Operational configuration belongs in the [demo](demo.md) and
+[frontend](frontend.md) guides, not this decision record.
